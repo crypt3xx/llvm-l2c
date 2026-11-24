@@ -19,6 +19,7 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/MathExtras.h"
 #include "llvm/Support/SMLoc.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cassert>
@@ -139,6 +140,39 @@ public:
 
   bool isMem() const override { return false; }
 
+  bool isSImm16() const {
+    if (!isImm())
+      return false;
+
+    const MCConstantExpr *ConstExpr = dyn_cast<MCConstantExpr>(Imm.Value);
+    if (!ConstExpr)
+      return false;
+    int64_t Value = ConstExpr->getValue();
+    return isInt<16>(Value);
+  }
+
+  bool isUImm16() const {
+    if (!isImm())
+      return false;
+
+    const MCConstantExpr *ConstExpr = dyn_cast<MCConstantExpr>(Imm.Value);
+    if (!ConstExpr)
+      return false;
+    int64_t Value = ConstExpr->getValue();
+    return isUInt<16>(Value);
+  }
+
+  bool isUImm5() const {
+    if (!isImm())
+      return false;
+
+    const MCConstantExpr *ConstExpr = dyn_cast<MCConstantExpr>(Imm.Value);
+    if (!ConstExpr)
+      return false;
+    int64_t Value = ConstExpr->getValue();
+    return isUInt<5>(Value);
+  }
+
   void addRegOperands(MCInst &Inst, unsigned N) const {
     assert(N == 1 && "Invalid number of operands!");
     Inst.addOperand(MCOperand::createReg(getReg()));
@@ -214,9 +248,14 @@ ParseStatus L2CAsmParser::parseOperand(OperandVector *Operands,
   // Attempt to parse token as register
   std::unique_ptr<L2COperand> Op = parseRegister();
 
-  // Attempt to parse token as immediate
-  if (!Op)
-    Op = parseImmediate();
+  if (Op) {
+    // We found a register
+    Operands->push_back(std::move(Op));
+    return ParseStatus::Success;
+  }
+
+  // If not register, attempt to parse token as immediate
+  Op = parseImmediate();
 
   // If the token could not be parsed then fail
   if (!Op) {
@@ -225,8 +264,38 @@ ParseStatus L2CAsmParser::parseOperand(OperandVector *Operands,
     return ParseStatus::Failure;
   }
 
-  // Push back parsed operand into list of operands
+  // We found an immediate
   Operands->push_back(std::move(Op));
+
+  // Check if there's a "(" after the immediate
+  if (Lexer.isNot(AsmToken::LParen))
+    return ParseStatus::Success;
+
+  // Left Parenthesis found, push the "(" token and consume it
+  Operands->push_back(L2COperand::createToken("(", Lexer.getLoc()));
+  Lex();
+
+  Op = parseRegister();
+
+  if (!Op) {
+    Error(Parser.getTok().getLoc(), "expected register");
+    Parser.eatToEndOfStatement();
+    return ParseStatus::Failure;
+  }
+
+  // Found register after imm then "("
+  Operands->push_back(std::move(Op));
+
+  // We should find a ")" after the reg, else we fail
+  if (Lexer.isNot(AsmToken::RParen)) {
+    Error(Parser.getTok().getLoc(), "expected a )");
+    Parser.eatToEndOfStatement();
+    return ParseStatus::Failure;
+  }
+
+  // push the ")" token and consume it
+  Operands->push_back(L2COperand::createToken(")", Lexer.getLoc()));
+  Lex();
 
   return ParseStatus::Success;
 }

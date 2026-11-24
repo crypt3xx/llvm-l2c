@@ -1,3 +1,5 @@
+// L2CDisassembler.cpp
+
 #include "MCTargetDesc/L2CMCTargetDesc.h"
 #include "TargetInfo/L2CTargetInfo.h"
 #include "llvm/MC/MCDecoder.h"
@@ -8,6 +10,7 @@
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/MathExtras.h"
 
 using namespace llvm;
 using namespace llvm::MCD;
@@ -55,6 +58,24 @@ DecodeGPRRegisterClass( // NOLINT(readability-identifier-naming)
   MCRegister Reg = L2C::R0 + RegNo;
   Inst.addOperand(MCOperand::createReg(Reg));
 
+  return MCDisassembler::Success;
+}
+
+static DecodeStatus decodeSImm16(MCInst &Inst, unsigned Imm, uint64_t,
+                                 const MCDisassembler *) {
+  Inst.addOperand(MCOperand::createImm(SignExtend64<16>(Imm)));
+  return MCDisassembler::Success;
+}
+
+static DecodeStatus decodeUImm16(MCInst &Inst, unsigned Imm, uint64_t,
+                                 const MCDisassembler *) {
+  Inst.addOperand(MCOperand::createImm(Imm));
+  return MCDisassembler::Success;
+}
+
+static DecodeStatus decodeUImm5(MCInst &Inst, unsigned Imm, uint64_t,
+                                const MCDisassembler *) {
+  Inst.addOperand(MCOperand::createImm(Imm));
   return MCDisassembler::Success;
 }
 

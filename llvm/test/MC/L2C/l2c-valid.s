@@ -1,6 +1,6 @@
 # RUN: llvm-mc -triple=l2c -show-encoding %s | FileCheck %s
 
-# Primary and ABI register names; output always uses ABI names.
+## Register-register ALU (R format)
 # CHECK: add a2, a0, a1 # encoding: [0xc1,0x08,0x02,0x00]
 add a2, a0, a1
 # CHECK: add a2, a0, a1 # encoding: [0xc1,0x08,0x02,0x00]
@@ -11,8 +11,114 @@ add r0, r0, r0
 add r29, r29, r30
 # CHECK: add ra, s0, t7 # encoding: [0xc1,0x8f,0x10,0x00]
 add r31, r17, r16
+# CHECK: sub a0, zero, a1 # encoding: [0x42,0x00,0x02,0x00]
+sub a0, zero, a1
+# CHECK: and t0, t1, t2 # encoding: [0x43,0x52,0x0b,0x00]
+and t0, t1, t2
+# CHECK: or s0, s1, s2 # encoding: [0x44,0x94,0x13,0x00]
+or s0, s1, s2
+# CHECK: xor a7, t7, s11 # encoding: [0x05,0x82,0x1c,0x00]
+xor a7, t7, s11
+# CHECK: sll a0, a0, a1 # encoding: [0x46,0x08,0x02,0x00]
+sll a0, a0, a1
+# CHECK: srl a2, a3, a4 # encoding: [0xc7,0x20,0x05,0x00]
+srl a2, a3, a4
+# CHECK: sra fp, sp, ra # encoding: [0x48,0xf7,0x1f,0x00]
+sra fp, sp, ra
+# CHECK: slt a0, a1, a2 # encoding: [0x49,0x10,0x03,0x00]
+slt a0, a1, a2
+# CHECK: sltu t3, t4, t5 # encoding: [0x0a,0x6b,0x0e,0x00]
+sltu t3, t4, t5
+# CHECK: mul s10, s11, fp # encoding: [0xcb,0xe6,0x1d,0x00]
+mul s10, s11, fp
 
-# ';' separates statements (spec delta D1).
+## System (R format, all fields zero)
+# CHECK: ecall # encoding: [0x3b,0x00,0x00,0x00]
+ecall
+# CHECK: ebreak # encoding: [0x3c,0x00,0x00,0x00]
+ebreak
+# CHECK: eret # encoding: [0x3d,0x00,0x00,0x00]
+eret
+
+## Immediate ALU, sign-extended simm16
+# CHECK: addi a0, zero, -4 # encoding: [0x51,0x00,0xfc,0xff]
+addi r1, r0, -4
+# CHECK: addi a0, a0, 32767 # encoding: [0x51,0x08,0xff,0x7f]
+addi a0, a0, 32767
+# CHECK: addi a0, a0, -32768 # encoding: [0x51,0x08,0x00,0x80]
+addi a0, a0, -32768
+# CHECK: slti a0, a1, -1 # encoding: [0x59,0x10,0xff,0xff]
+slti a0, a1, -1
+# CHECK: sltiu a0, a1, 1 # encoding: [0x5a,0x10,0x01,0x00]
+sltiu a0, a1, 1
+
+## Immediate ALU, zero-extended uimm16
+# CHECK: andi a0, a1, 65535 # encoding: [0x53,0x10,0xff,0xff]
+andi a0, a1, 65535
+# CHECK: andni sp, sp, 15 # encoding: [0x92,0xf7,0x0f,0x00]
+andni r30, r30, 15
+# CHECK: ori a4, a4, 34661 # encoding: [0x54,0x29,0x65,0x87]
+ori r5, r5, 0x8765
+# CHECK: xori t0, t1, 0 # encoding: [0x55,0x52,0x00,0x00]
+xori t0, t1, 0
+# CHECK: ori a0, zero, 0 # encoding: [0x54,0x00,0x00,0x00]
+ori a0, zero, 0
+
+## Shift immediates, uimm5
+# CHECK: slli a0, a1, 31 # encoding: [0x56,0x10,0x1f,0x00]
+slli a0, a1, 31
+# CHECK: srli a0, a1, 0 # encoding: [0x57,0x10,0x00,0x00]
+srli a0, a1, 0
+# CHECK: srai t0, t0, 5 # encoding: [0x58,0x4a,0x05,0x00]
+srai t0, t0, 5
+
+## Upper immediates, uimm16
+# CHECK: lui a4, 4660 # encoding: [0x50,0x01,0x34,0x12]
+lui r5, 0x1234
+# CHECK: lui a0, 65535 # encoding: [0x50,0x00,0xff,0xff]
+lui a0, 65535
+# CHECK: auipc t0, 16 # encoding: [0x5b,0x02,0x10,0x00]
+auipc t0, 16
+# CHECK: auipc a0, 0 # encoding: [0x5b,0x00,0x00,0x00]
+auipc a0, 0
+
+## CSR access, numeric CSR (named CSRs come in Lesson 8)
+# CHECK: csrr a0, 3 # encoding: [0x5c,0x00,0x03,0x00]
+csrr a0, 3
+# CHECK: csrr a1, 9 # encoding: [0x9c,0x00,0x09,0x00]
+csrr a1, 9
+# CHECK: csrw 1, a0 # encoding: [0x1d,0x08,0x01,0x00]
+csrw 1, a0
+# CHECK: csrw 65535, t7 # encoding: [0x1d,0x80,0xff,0xff]
+csrw 65535, t7
+
+## Loads, simm16 byte offset
+# CHECK: lw a5, -4(sp) # encoding: [0xa2,0xf1,0xfc,0xff]
+lw r6, -4(r30)
+# CHECK: lb a0, 0(a1) # encoding: [0x60,0x10,0x00,0x00]
+lb a0, 0(a1)
+# CHECK: lh a0, 32767(a1) # encoding: [0x61,0x10,0xff,0x7f]
+lh a0, 32767(a1)
+# CHECK: lbu a0, -32768(a1) # encoding: [0x64,0x10,0x00,0x80]
+lbu a0, -32768(a1)
+# CHECK: lhu t0, 2(sp) # encoding: [0x65,0xf2,0x02,0x00]
+lhu t0, 2(sp)
+
+## Stores, split simm16 byte offset
+# CHECK: sw a1, 8(sp) # encoding: [0x2a,0xf2,0x02,0x00]
+sw r2, 8(r30)
+# CHECK: sw a0, -4(sp) # encoding: [0x2a,0xf7,0xe1,0xff]
+sw a0, -4(sp)
+# CHECK: sb a0, 31(a1) # encoding: [0xe8,0x17,0x01,0x00]
+sb a0, 31(a1)
+# CHECK: sh a0, 32(a1) # encoding: [0x29,0x10,0x21,0x00]
+sh a0, 32(a1)
+# CHECK: sw ra, -32768(sp) # encoding: [0x2a,0xf0,0x1f,0x80]
+sw ra, -32768(sp)
+# CHECK: sb zero, 32767(t0) # encoding: [0xe8,0x4f,0xe0,0x7f]
+sb zero, 32767(t0)
+
+## ';' separates statements (spec delta D1)
 # CHECK:      add a0, a1, a2 # encoding: [0x41,0x10,0x03,0x00]
 # CHECK-NEXT: add a3, a0, a0 # encoding: [0x01,0x09,0x01,0x00]
 add a0, a1, a2; add a3, a0, a0

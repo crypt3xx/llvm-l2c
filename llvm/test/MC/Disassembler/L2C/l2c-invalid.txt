@@ -1,8 +1,43 @@
 # RUN: llvm-mc --disassemble -triple=l2c %s 2>&1 | FileCheck %s
 
+# Every word below must be rejected (spec 6.9). llvm-mc reports a warning
+# for each one and keeps going, so all of them are checked in one run.
+
+# R-format ALU (sub) with reserved bit 31 set
+# CHECK: [[@LINE+1]]:1: warning: invalid instruction encoding
+0x42 0x10 0x03 0x80
+
 # add with reserved bit 21 set
 # CHECK: [[@LINE+1]]:1: warning: invalid instruction encoding
 0x01 0x00 0x20 0x00
+
+# slli with imm[15:5] != 0 (bit 21 set)
+# CHECK: [[@LINE+1]]:1: warning: invalid instruction encoding
+0x56 0x08 0x21 0x00
+
+# lui with rs1 != 0
+# CHECK: [[@LINE+1]]:1: warning: invalid instruction encoding
+0x50 0x08 0x34 0x12
+
+# auipc with rs1 != 0
+# CHECK: [[@LINE+1]]:1: warning: invalid instruction encoding
+0x5b 0x08 0x00 0x00
+
+# csrr with rs1 != 0
+# CHECK: [[@LINE+1]]:1: warning: invalid instruction encoding
+0x5c 0x08 0x03 0x00
+
+# csrw with rd != 0
+# CHECK: [[@LINE+1]]:1: warning: invalid instruction encoding
+0x5d 0x08 0x03 0x00
+
+# ecall with rd != 0
+# CHECK: [[@LINE+1]]:1: warning: invalid instruction encoding
+0x7b 0x00 0x00 0x00
+
+# eret with bit 31 set
+# CHECK: [[@LINE+1]]:1: warning: invalid instruction encoding
+0x3d 0x00 0x00 0x80
 
 # opcode 0x00 is permanently illegal
 # CHECK: [[@LINE+1]]:1: warning: invalid instruction encoding
@@ -11,3 +46,23 @@
 # opcode 0x3F is permanently illegal
 # CHECK: [[@LINE+1]]:1: warning: invalid instruction encoding
 0x3f 0x00 0x00 0x00
+
+# reserved opcode 0x0C (future mulh)
+# CHECK: [[@LINE+1]]:1: warning: invalid instruction encoding
+0x0c 0x00 0x00 0x00
+
+# reserved opcode 0x1E (future csrs)
+# CHECK: [[@LINE+1]]:1: warning: invalid instruction encoding
+0x1e 0x00 0x00 0x00
+
+# reserved opcode 0x23
+# CHECK: [[@LINE+1]]:1: warning: invalid instruction encoding
+0x23 0x00 0x00 0x00
+
+# reserved opcode 0x2E (future fence)
+# CHECK: [[@LINE+1]]:1: warning: invalid instruction encoding
+0x2e 0x00 0x00 0x00
+
+# reserved opcode 0x3E (future wfi)
+# CHECK: [[@LINE+1]]:1: warning: invalid instruction encoding
+0x3e 0x00 0x00 0x00
