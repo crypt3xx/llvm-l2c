@@ -10,6 +10,7 @@ llvm_tablegen(L2CGenSubtargetInfo.inc -gen-subtarget)
 llvm_tablegen(L2CGenAsmMatcher.inc -gen-asm-matcher)
 llvm_tablegen(L2CGenAsmWriter.inc -gen-asm-writer)
 llvm_tablegen(L2CGenMCCodeEmitter.inc -gen-emitter)
+llvm_tablegen(L2CGenDisassemblerTables.inc -gen-disassembler)
 
 add_public_tablegen_target(L2CCommonTableGen)
 
@@ -32,3 +33,4 @@ add_llvm_target(L2CCodeGen
 add_subdirectory(MCTargetDesc)
 add_subdirectory(AsmParser)
 add_subdirectory(TargetInfo)
+add_subdirectory(Disassembler)

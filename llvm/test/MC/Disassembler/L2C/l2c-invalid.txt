@@ -1,0 +1,13 @@
+# RUN: llvm-mc --disassemble -triple=l2c %s 2>&1 | FileCheck %s
+
+# add with reserved bit 21 set
+# CHECK: [[@LINE+1]]:1: warning: invalid instruction encoding
+0x01 0x00 0x20 0x00
+
+# opcode 0x00 is permanently illegal
+# CHECK: [[@LINE+1]]:1: warning: invalid instruction encoding
+0x00 0x00 0x00 0x00
+
+# opcode 0x3F is permanently illegal
+# CHECK: [[@LINE+1]]:1: warning: invalid instruction encoding
+0x3f 0x00 0x00 0x00
