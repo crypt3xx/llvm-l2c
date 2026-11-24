@@ -140,37 +140,42 @@ public:
 
   bool isMem() const override { return false; }
 
-  bool isSImm16() const {
+  bool getConstantImm(int64_t &V) const {
     if (!isImm())
       return false;
 
     const MCConstantExpr *ConstExpr = dyn_cast<MCConstantExpr>(Imm.Value);
     if (!ConstExpr)
       return false;
-    int64_t Value = ConstExpr->getValue();
-    return isInt<16>(Value);
+
+    V = ConstExpr->getValue();
+
+    return true;
+  }
+
+  bool isSImm16() const {
+    int64_t V;
+    return getConstantImm(V) && isInt<16>(V);
   }
 
   bool isUImm16() const {
-    if (!isImm())
-      return false;
-
-    const MCConstantExpr *ConstExpr = dyn_cast<MCConstantExpr>(Imm.Value);
-    if (!ConstExpr)
-      return false;
-    int64_t Value = ConstExpr->getValue();
-    return isUInt<16>(Value);
+    int64_t V;
+    return getConstantImm(V) && isUInt<16>(V);
   }
 
   bool isUImm5() const {
-    if (!isImm())
-      return false;
+    int64_t V;
+    return getConstantImm(V) && isUInt<5>(V);
+  }
 
-    const MCConstantExpr *ConstExpr = dyn_cast<MCConstantExpr>(Imm.Value);
-    if (!ConstExpr)
-      return false;
-    int64_t Value = ConstExpr->getValue();
-    return isUInt<5>(Value);
+  bool isBrTarget16() const {
+    int64_t V;
+    return getConstantImm(V) && (V % 4 == 0) && isInt<18>(V);
+  }
+
+  bool isJmpTarget26() const {
+    int64_t V;
+    return getConstantImm(V) && (V % 4 == 0) && isInt<28>(V);
   }
 
   void addRegOperands(MCInst &Inst, unsigned N) const {

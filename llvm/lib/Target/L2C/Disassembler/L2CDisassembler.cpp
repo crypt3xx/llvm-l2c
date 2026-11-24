@@ -79,6 +79,13 @@ static DecodeStatus decodeUImm5(MCInst &Inst, unsigned Imm, uint64_t,
   return MCDisassembler::Success;
 }
 
+template <int N>
+static DecodeStatus decodeSImmLsl2(MCInst &Inst, unsigned Imm, uint64_t,
+                                   const MCDisassembler *) {
+  Inst.addOperand(MCOperand::createImm(SignExtend64<N>(Imm) * 4));
+  return MCDisassembler::Success;
+}
+
 #include "L2CGenDisassemblerTables.inc"
 
 static DecodeStatus readInstruction32(ArrayRef<uint8_t> Bytes, uint64_t &Size,

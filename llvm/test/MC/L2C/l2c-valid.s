@@ -104,6 +104,48 @@ lbu a0, -32768(a1)
 # CHECK: lhu t0, 2(sp) # encoding: [0x65,0xf2,0x02,0x00]
 lhu t0, 2(sp)
 
+## Conditional branches, byte offset (spec delta D3)
+# CHECK: beq a0, a1, -8 # encoding: [0xb0,0x0f,0xe2,0xff]
+beq r1, r2, -8
+# CHECK: beq a0, a1, 8 # encoding: [0xb0,0x08,0x02,0x00]
+beq a0, a1, 8
+# CHECK: bne a0, zero, 4 # encoding: [0x71,0x08,0x00,0x00]
+bne a0, zero, 4
+# CHECK: blt t0, t1, 0 # encoding: [0x34,0x48,0x0a,0x00]
+blt t0, t1, 0
+# CHECK: bge s0, s1, -4 # encoding: [0xf5,0x8f,0xf2,0xff]
+bge s0, s1, -4
+# CHECK: bltu a0, a1, 131068 # encoding: [0xf6,0x0f,0xe2,0x7f]
+bltu a0, a1, 131068
+# CHECK: bgeu a0, a1, -131072 # encoding: [0x37,0x08,0x02,0x80]
+bgeu a0, a1, -131072
+# CHECK: beq zero, zero, 128 # encoding: [0x30,0x00,0x20,0x00]
+beq zero, zero, 128
+
+## Jumps, byte offset (spec delta D3)
+# CHECK: jal 256 # encoding: [0x38,0x10,0x00,0x00]
+jal 0x100
+# CHECK: j 256 # encoding: [0x3a,0x10,0x00,0x00]
+j 0x100
+# CHECK: jal -4 # encoding: [0xf8,0xff,0xff,0xff]
+jal -4
+# CHECK: j 0 # encoding: [0x3a,0x00,0x00,0x00]
+j 0
+# CHECK: jal 134217724 # encoding: [0xf8,0xff,0xff,0x7f]
+jal 134217724
+# CHECK: j -134217728 # encoding: [0x3a,0x00,0x00,0x80]
+j -134217728
+
+## jalr, simm16 offset (no memory syntax)
+# CHECK: jalr zero, ra, 0 # encoding: [0x39,0xf8,0x00,0x00]
+jalr r0, r31, 0
+# CHECK: jalr ra, t0, -4 # encoding: [0xf9,0x4f,0xfc,0xff]
+jalr ra, t0, -4
+# CHECK: jalr a0, a0, 32767 # encoding: [0x79,0x08,0xff,0x7f]
+jalr a0, a0, 32767
+# CHECK: jalr t0, t1, -32768 # encoding: [0x79,0x52,0x00,0x80]
+jalr t0, t1, -32768
+
 ## Stores, split simm16 byte offset
 # CHECK: sw a1, 8(sp) # encoding: [0x2a,0xf2,0x02,0x00]
 sw r2, 8(r30)

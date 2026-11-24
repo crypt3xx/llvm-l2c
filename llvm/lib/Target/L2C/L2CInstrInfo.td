@@ -40,6 +40,36 @@ def uimm5 : Operand<i32> {
   let DecoderMethod = "decodeUImm5";
 }
 
+// Signed 16 bits Immediate for Branch targets (must be multiple of 4)
+def BrTarget16AsmOperand : AsmOperandClass {
+    let Name = "BrTarget16";
+    let RenderMethod = "addImmOperands";
+    let DiagnosticType = "InvalidBrTarget16";
+    let DiagnosticString = "branch target must be a multiple of 4 in the range [-131072, 131068]";
+}
+def brtarget16 : Operand<i32> {
+    let ParserMatchClass = BrTarget16AsmOperand;
+    let DecoderMethod = "decodeSImmLsl2<16>";
+    let EncoderMethod = "getBranchTargetOpValue";
+    let OperandType = "OPERAND_PCREL";
+    let PrintMethod = "printBranchOperand";
+}
+
+// Signed 26 bits Immediate for Jump targets (must be multiple of 4)
+def JmpTarget26AsmOperand : AsmOperandClass {
+    let Name = "JmpTarget26";
+    let RenderMethod = "addImmOperands";
+    let DiagnosticType = "InvalidJmpTarget26";
+    let DiagnosticString = "jump target must be a multiple of 4 in the range [-134217728, 134217724]";
+}
+def jmptarget26 : Operand<i32> {
+    let ParserMatchClass = JmpTarget26AsmOperand;
+    let DecoderMethod = "decodeSImmLsl2<26>";
+    let EncoderMethod = "getBranchTargetOpValue";
+    let OperandType = "OPERAND_PCREL";
+    let PrintMethod = "printBranchOperand";
+}
+
 
 // ALU Register-Register Ops
 class ALU_rr<bits<6> opcode, string opcodestr, bit Commutable = 0>
@@ -200,3 +230,50 @@ class Store<bits<6> opcode, string opcodestr>
 def SB : Store<0b101000, "sb">;
 def SH : Store<0b101001, "sh">;
 def SW : Store<0b101010, "sw">;
+
+
+// Branch Ops
+class Branch<bits<6> opcode, string opcodestr>
+    : L2CInstB<opcode, (outs), (ins GPR:$rs1, GPR:$rs2, brtarget16:$imm16), opcodestr, "$rs1, $rs2, $imm16", []>
+{
+    let hasSideEffects = 0;
+    let mayLoad = 0;
+    let mayStore = 0;
+    let isBranch = 1;
+    let isTerminator = 1;
+}
+
+def BEQ  : Branch<0b110000, "beq" >;
+def BNE  : Branch<0b110001, "bne" >;
+def BLT  : Branch<0b110100, "blt" >;
+def BGE  : Branch<0b110101, "bge" >;
+def BLTU : Branch<0b110110, "bltu">;
+def BGEU : Branch<0b110111, "bgeu">;
+
+
+// Jump / Jump and Link
+def J   : L2CInstJ<0b111010, (outs), (ins jmptarget26:$imm26), "j",   "$imm26", []> {
+    let hasSideEffects = 0;
+    let mayLoad = 0;
+    let mayStore = 0;
+    
+    let isBranch = 1;
+    let isTerminator = 1;
+    let isBarrier = 1;
+}
+def JAL : L2CInstJ<0b111000, (outs), (ins jmptarget26:$imm26), "jal", "$imm26", []> {
+    let hasSideEffects = 0;
+    let mayLoad = 0;
+    let mayStore = 0;
+
+    let isCall = 1;
+    let Defs = [R31];
+}
+
+
+// Jump and Link Register
+def JALR : L2CInstI<0b111001, (outs GPR:$rd), (ins GPR:$rs1, simm16:$imm16), "jalr", "$rd, $rs1, $imm16", []> {
+    let hasSideEffects = 0;
+    let mayLoad = 0;
+    let mayStore = 0;
+}

@@ -39,6 +39,12 @@ public:
                              SmallVectorImpl<MCFixup> &Fixups,
                              const MCSubtargetInfo &SubtargetInfo) const;
 
+  // Encoder for Branchs/Jumps Operands (see brtarget16 and jmptarget26 in
+  // L2CInstrInfo.td)
+  unsigned getBranchTargetOpValue(const MCInst &MI, unsigned OpNo,
+                                  SmallVectorImpl<MCFixup> &Fixups,
+                                  const MCSubtargetInfo &STI) const;
+
   void encodeInstruction(const MCInst &Inst, SmallVectorImpl<char> &CB,
                          SmallVectorImpl<MCFixup> &Fixups,
                          const MCSubtargetInfo &SubtargetInfo) const override;
@@ -63,7 +69,20 @@ unsigned L2CMCCodeEmitter::getMachineOpValue(
   if (MCOp.isImm())
     return MCOp.getImm();
 
-  llvm_unreachable("fixups not supported for yet");
+  report_fatal_error("fixups not supported for yet");
+  return 0;
+}
+
+unsigned
+L2CMCCodeEmitter::getBranchTargetOpValue(const MCInst &MI, unsigned OpNo,
+                                         SmallVectorImpl<MCFixup> &Fixups,
+                                         const MCSubtargetInfo &STI) const {
+  const MCOperand &MO = MI.getOperand(OpNo);
+
+  if (MO.isImm())
+    return static_cast<unsigned>(MO.getImm() >> 2);
+
+  report_fatal_error("Unhandled expression!");
   return 0;
 }
 
