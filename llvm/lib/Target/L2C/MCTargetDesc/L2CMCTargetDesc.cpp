@@ -5,6 +5,7 @@
 #include "L2CMCAsmInfo.h"
 #include "TargetInfo/L2CTargetInfo.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstrAnalysis.h"
 #include "llvm/MC/MCInstrInfo.h"
@@ -141,8 +142,8 @@ LLVMInitializeL2CTargetMC() { // NOLINT(readability-identifier-naming)
                                         createL2CMCInstPrinter);
 
   // Register the MC code emitter
-  //   TargetRegistry::RegisterMCCodeEmitter(getTheL2CTarget(),
-  //                                         createLanaiMCCodeEmitter);
+  TargetRegistry::RegisterMCCodeEmitter(getTheL2CTarget(),
+                                        createL2CMCCodeEmitter);
 
   // Register the ASM Backend
   //   TargetRegistry::RegisterMCAsmBackend(getTheL2CTarget(),

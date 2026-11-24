@@ -9,6 +9,7 @@ llvm_tablegen(L2CGenInstrInfo.inc -gen-instr-info)
 llvm_tablegen(L2CGenSubtargetInfo.inc -gen-subtarget)
 llvm_tablegen(L2CGenAsmMatcher.inc -gen-asm-matcher)
 llvm_tablegen(L2CGenAsmWriter.inc -gen-asm-writer)
+llvm_tablegen(L2CGenMCCodeEmitter.inc -gen-emitter)
 
 add_public_tablegen_target(L2CCommonTableGen)
 

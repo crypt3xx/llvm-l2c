@@ -3,21 +3,22 @@
 #ifndef LLVM_LIB_TARGET_L2C_MCTARGETDESC_L2CMCTARGETDESC_H
 #define LLVM_LIB_TARGET_L2C_MCTARGETDESC_L2CMCTARGETDESC_H
 
+#include "llvm/MC/MCContext.h"
+#include "llvm/MC/MCInstrInfo.h"
 // #include "llvm/MC/MCRegisterInfo.h"
 // #include "llvm/MC/MCTargetOptions.h"
 // #include "llvm/Support/DataTypes.h"
 
 namespace llvm {
+class MCCodeEmitter;
 // class MCAsmBackend;
-// class MCCodeEmitter;
 // class MCContext;
 // class MCInstrInfo;
 // class MCObjectTargetWriter;
 // class MCSubtargetInfo;
 // class Target;
 
-// MCCodeEmitter *createLanaiMCCodeEmitter(const MCInstrInfo &MCII,
-//                                         MCContext &Ctx);
+MCCodeEmitter *createL2CMCCodeEmitter(const MCInstrInfo &MCII, MCContext &Ctx);
 
 // MCAsmBackend *createLanaiAsmBackend(const Target &T, const MCSubtargetInfo
 // &STI,
