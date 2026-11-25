@@ -70,6 +70,21 @@ def jmptarget26 : Operand<i32> {
     let PrintMethod = "printBranchOperand";
 }
 
+// Unsigned 16 bits Immediate for CSR System Registers
+def CSRSysRegAsmOperand : AsmOperandClass {
+    let Name = "CSRSysReg";
+    // let PredicateMethod = "isUImm16";
+    let ParserMethod = "parseCSRSystemRegister";
+    let RenderMethod = "addSysRegOperands";
+    let DiagnosticType = "InvalidCSRSysReg";
+    let DiagnosticString = "operand must be a valid system register name or an integer in the range [0, 65535]";
+}
+def csr_sysreg : Operand<i32> {
+    let ParserMatchClass = CSRSysRegAsmOperand;
+    let DecoderMethod = "decodeUImm16";
+    let PrintMethod = "printCSRSystemRegister";
+}
+
 
 // ALU Register-Register Ops
 class ALU_rr<bits<6> opcode, string opcodestr, bit Commutable = 0>
@@ -176,7 +191,7 @@ def AUIPC : Upper<0b011011, "auipc">;
 
 // CSR Read
 class CSRRead<bits<6> opcode, string opcodestr>
-    : L2CInstI<opcode, (outs GPR:$rd), (ins uimm16:$imm16), opcodestr, "$rd, $imm16", []>
+    : L2CInstI<opcode, (outs GPR:$rd), (ins csr_sysreg:$imm16), opcodestr, "$rd, $imm16", []>
 {
     let hasSideEffects = 1;
     let mayLoad = 0;
@@ -190,7 +205,7 @@ def CSRR : CSRRead<0b011100, "csrr">;
 
 // CSR Write
 class CSRWrite<bits<6> opcode, string opcodestr>
-    : L2CInstI<opcode, (outs), (ins uimm16:$imm16, GPR:$rs1), opcodestr, "$imm16, $rs1", []>
+    : L2CInstI<opcode, (outs), (ins csr_sysreg:$imm16, GPR:$rs1), opcodestr, "$imm16, $rs1", []>
 {
     let hasSideEffects = 1;
     let mayLoad = 0;

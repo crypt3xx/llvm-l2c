@@ -11,6 +11,7 @@ llvm_tablegen(L2CGenAsmMatcher.inc -gen-asm-matcher)
 llvm_tablegen(L2CGenAsmWriter.inc -gen-asm-writer)
 llvm_tablegen(L2CGenMCCodeEmitter.inc -gen-emitter)
 llvm_tablegen(L2CGenDisassemblerTables.inc -gen-disassembler)
+llvm_tablegen(L2CGenSearchableTables.inc -gen-searchable-tables)
 
 add_public_tablegen_target(L2CCommonTableGen)
 

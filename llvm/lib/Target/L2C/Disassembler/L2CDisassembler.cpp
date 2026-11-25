@@ -2,8 +2,8 @@
 
 #include "MCTargetDesc/L2CMCTargetDesc.h"
 #include "TargetInfo/L2CTargetInfo.h"
-#include "llvm/MC/MCDecoder.h"
-#include "llvm/MC/MCDecoderOps.h"
+#include "llvm/MC/MCDecoder.h"    // IWYU pragma: keep
+#include "llvm/MC/MCDecoderOps.h" // IWYU pragma: keep
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCRegister.h"
 #include "llvm/MC/MCSubtargetInfo.h"

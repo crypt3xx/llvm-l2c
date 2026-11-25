@@ -1,6 +1,7 @@
 // L2CInstPrinter.cpp
 
 #include "L2CInstPrinter.h"
+#include "L2CBaseInfo.h"
 #include "L2CMCTargetDesc.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCInst.h"
@@ -66,6 +67,26 @@ void L2CInstPrinter::printBranchOperand(const MCInst *MI, uint64_t Address,
 
   // Default (llvm-mc): print the byte offset, exactly like any immediate
   printImm(MI, OpNo, STI, O);
+}
+
+void L2CInstPrinter::printCSRSystemRegister(const MCInst *MI, unsigned OpNo,
+                                            const MCSubtargetInfo &STI,
+                                            raw_ostream &O) {
+  unsigned Imm = MI->getOperand(OpNo).getImm();
+  const L2CSysReg::SysReg *Reg = L2CSysReg::lookupSysRegByEncoding(Imm);
+
+  // If it's a csrw instr and the sysreg is readonly print it as a number
+  if (MI->getOpcode() == L2C::CSRW && Reg && Reg->ReadOnly) {
+    markup(O, Markup::Immediate) << formatImm(Imm);
+    return;
+  }
+
+  if (Reg) {
+    markup(O, Markup::Register) << L2CSysReg::getSysRegStr(Reg->Name);
+    return;
+  }
+
+  markup(O, Markup::Immediate) << formatImm(Imm);
 }
 
 void L2CInstPrinter::printImm(const MCInst *MI, unsigned OpNo,

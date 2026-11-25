@@ -3,6 +3,7 @@
 include "llvm/Target/Target.td"
 include "L2CRegisterInfo.td"
 include "L2CInstrInfo.td"
+include "L2CSystemOperands.td"
 
 def : ProcessorModel<"generic", NoSchedModel, []>;
 

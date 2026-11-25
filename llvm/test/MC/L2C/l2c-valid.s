@@ -82,15 +82,72 @@ auipc t0, 16
 # CHECK: auipc a0, 0 # encoding: [0x5b,0x00,0x00,0x00]
 auipc a0, 0
 
-## CSR access, numeric CSR (named CSRs come in Lesson 8)
-# CHECK: csrr a0, 3 # encoding: [0x5c,0x00,0x03,0x00]
+## CSR read by name (spec 6.2)
+# CHECK: csrr a0, status # encoding: [0x5c,0x00,0x00,0x00]
+csrr a0, status
+# CHECK: csrr a0, tvec # encoding: [0x5c,0x00,0x01,0x00]
+csrr a0, tvec
+# CHECK: csrr a0, epc # encoding: [0x5c,0x00,0x02,0x00]
+csrr a0, epc
+# CHECK: csrr a0, cause # encoding: [0x5c,0x00,0x03,0x00]
+csrr a0, cause
+# CHECK: csrr a0, badaddr # encoding: [0x5c,0x00,0x04,0x00]
+csrr a0, badaddr
+# CHECK: csrr a0, scratch # encoding: [0x5c,0x00,0x05,0x00]
+csrr a0, scratch
+# CHECK: csrr a0, ie # encoding: [0x5c,0x00,0x06,0x00]
+csrr a0, ie
+# CHECK: csrr a0, ip # encoding: [0x5c,0x00,0x07,0x00]
+csrr a0, ip
+# CHECK: csrr a1, cycle # encoding: [0x9c,0x00,0x08,0x00]
+csrr a1, cycle
+# CHECK: csrr a1, cycleh # encoding: [0x9c,0x00,0x09,0x00]
+csrr a1, cycleh
+# CHECK: csrr t0, instret # encoding: [0x5c,0x02,0x0a,0x00]
+csrr t0, instret
+# CHECK: csrr t0, instreth # encoding: [0x5c,0x02,0x0b,0x00]
+csrr t0, instreth
+
+## CSR write by name (writable CSRs only)
+# CHECK: csrw status, a0 # encoding: [0x1d,0x08,0x00,0x00]
+csrw status, a0
+# CHECK: csrw tvec, a0 # encoding: [0x1d,0x08,0x01,0x00]
+csrw tvec, a0
+# CHECK: csrw epc, t0 # encoding: [0x1d,0x48,0x02,0x00]
+csrw epc, t0
+# CHECK: csrw cause, zero # encoding: [0x1d,0x00,0x03,0x00]
+csrw cause, zero
+# CHECK: csrw badaddr, a1 # encoding: [0x1d,0x10,0x04,0x00]
+csrw badaddr, a1
+# CHECK: csrw scratch, sp # encoding: [0x1d,0xf0,0x05,0x00]
+csrw scratch, sp
+# CHECK: csrw ie, a0 # encoding: [0x1d,0x08,0x06,0x00]
+csrw ie, a0
+
+## CSR by number: known numbers print as names, unknown ones as numbers
+# CHECK: csrr a0, cause # encoding: [0x5c,0x00,0x03,0x00]
 csrr a0, 3
-# CHECK: csrr a1, 9 # encoding: [0x9c,0x00,0x09,0x00]
-csrr a1, 9
-# CHECK: csrw 1, a0 # encoding: [0x1d,0x08,0x01,0x00]
+# CHECK: csrr a0, cycle # encoding: [0x5c,0x00,0x08,0x00]
+csrr a0, 0x0008
+# CHECK: csrw tvec, a0 # encoding: [0x1d,0x08,0x01,0x00]
 csrw 1, a0
+# CHECK: csrr a0, 12 # encoding: [0x5c,0x00,0x0c,0x00]
+csrr a0, 12
 # CHECK: csrw 65535, t7 # encoding: [0x1d,0x80,0xff,0xff]
 csrw 65535, t7
+
+## CSR by variable symbol
+.set MYCSR, 8
+# CHECK: csrw 8, a0 # encoding: [0x1d,0x08,0x08,0x00]
+csrw MYCSR, a0
+# CHECK: csrr a0, cycle # encoding: [0x5c,0x00,0x08,0x00]
+csrr a0, MYCSR
+
+# An expression involving a .set symbol
+# CHECK: csrr a0, cycleh # encoding: [0x5c,0x00,0x09,0x00]
+csrr a0, MYCSR + 1
+# CHECK: csrr a0, cycle # encoding: [0x5c,0x00,0x08,0x00]
+csrr a0, (4 + 4)
 
 ## Loads, simm16 byte offset
 # CHECK: lw a5, -4(sp) # encoding: [0xa2,0xf1,0xfc,0xff]

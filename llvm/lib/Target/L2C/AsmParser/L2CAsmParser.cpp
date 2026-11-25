@@ -1,9 +1,11 @@
 // L2CAsmParser.cpp
 
+#include "MCTargetDesc/L2CBaseInfo.h"
 #include "MCTargetDesc/L2CInstPrinter.h"
-#include "MCTargetDesc/L2CMCTargetDesc.h" // IWYU pragma: keep
+#include "MCTargetDesc/L2CMCTargetDesc.h"
 #include "TargetInfo/L2CTargetInfo.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/Twine.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
@@ -45,6 +47,8 @@ public:
   ParseStatus tryParseRegister(MCRegister &Reg, SMLoc &StartLoc,
                                SMLoc &EndLoc) override;
 
+  ParseStatus parseCSRSystemRegister(OperandVector &Operands);
+
   bool parseInstruction(ParseInstructionInfo &Info, StringRef Name,
                         SMLoc NameLoc, OperandVector &Operands) override;
 
@@ -77,11 +81,7 @@ private:
 
 // L2COperand - Instances of this class represent a parsed machine instruction
 struct L2COperand : public MCParsedAsmOperand {
-  enum KindTy {
-    TOKEN,
-    REGISTER,
-    IMMEDIATE,
-  } Kind;
+  enum KindTy { TOKEN, REGISTER, IMMEDIATE, SYSTEM_REGISTER } Kind;
 
   SMLoc StartLoc, EndLoc;
 
@@ -98,10 +98,18 @@ struct L2COperand : public MCParsedAsmOperand {
     const MCExpr *Value;
   };
 
+  struct SysRegOp {
+    const char *Data;
+    unsigned Length;
+    unsigned Encoding;
+    bool ParsedFromName;
+  };
+
   union {
     struct Token Tok;
     struct RegOp Reg;
     struct ImmOp Imm;
+    struct SysRegOp SysReg;
   };
 
   explicit L2COperand(KindTy Kind) : Kind(Kind) {}
@@ -131,12 +139,19 @@ public:
     return Imm.Value;
   }
 
+  const SysRegOp getSysReg() const {
+    assert(Kind == KindTy::SYSTEM_REGISTER && "Invalid type access!");
+    return SysReg;
+  }
+
   // Functions for testing operand type
   bool isToken() const override { return Kind == TOKEN; }
 
   bool isReg() const override { return Kind == REGISTER; }
 
   bool isImm() const override { return Kind == IMMEDIATE; }
+
+  bool isSysReg() const { return Kind == SYSTEM_REGISTER; }
 
   bool isMem() const override { return false; }
 
@@ -178,6 +193,8 @@ public:
     return getConstantImm(V) && (V % 4 == 0) && isInt<28>(V);
   }
 
+  bool isCSRSysReg() const { return isSysReg(); }
+
   void addRegOperands(MCInst &Inst, unsigned N) const {
     assert(N == 1 && "Invalid number of operands!");
     Inst.addOperand(MCOperand::createReg(getReg()));
@@ -194,6 +211,12 @@ public:
       Inst.addOperand(MCOperand::createExpr(Expr));
   }
 
+  void addSysRegOperands(MCInst &Inst, unsigned N) const {
+    assert(N == 1 && "Invalid number of operands!");
+    const L2COperand::SysRegOp SysRegOp = getSysReg();
+    Inst.addOperand(MCOperand::createImm(SysRegOp.Encoding));
+  }
+
   void print(raw_ostream &OS, const MCAsmInfo &MAI) const override {
     switch (Kind) {
     case TOKEN:
@@ -208,6 +231,17 @@ public:
       else
         MAI.printExpr(OS, *getImm());
       break;
+    case SYSTEM_REGISTER: {
+      const SysRegOp SysRegOp = getSysReg();
+      if (SysRegOp.Length) {
+        OS << "<sysreg: " << StringRef(SysRegOp.Data, SysRegOp.Length) << " ("
+           << SysReg.Encoding << ")>";
+      } else {
+        OS << "<sysreg: Unknown (" << SysReg.Encoding << ")>";
+      }
+    }
+
+    break;
     }
   }
 
@@ -237,6 +271,19 @@ public:
     Op->EndLoc = End;
     return Op;
   }
+
+  static std::unique_ptr<L2COperand> createSysReg(StringRef Str, SMLoc Start,
+                                                  SMLoc End, unsigned Encoding,
+                                                  bool ParsedFromName) {
+    auto Op = std::make_unique<L2COperand>(KindTy::SYSTEM_REGISTER);
+    Op->SysReg.Data = Str.data();
+    Op->SysReg.Length = Str.size();
+    Op->SysReg.Encoding = Encoding;
+    Op->SysReg.ParsedFromName = ParsedFromName;
+    Op->StartLoc = Start;
+    Op->EndLoc = End;
+    return Op;
+  }
 };
 
 } // end anonymous namespace
@@ -249,6 +296,11 @@ public:
 // information, adding to operands.
 ParseStatus L2CAsmParser::parseOperand(OperandVector *Operands,
                                        StringRef Mnemonic) {
+
+  auto Res = MatchOperandParserImpl(*Operands, Mnemonic);
+
+  if (!Res.isNoMatch())
+    return Res;
 
   // Attempt to parse token as register
   std::unique_ptr<L2COperand> Op = parseRegister();
@@ -369,6 +421,74 @@ ParseStatus L2CAsmParser::tryParseRegister(MCRegister &Reg, SMLoc &StartLoc,
   return ParseStatus::Success;
 }
 
+// Builds a CSR operand from an evaluated number, or returns nullptr if the
+// number is out of range. Numbers and .set symbols never count as "written by
+// name", so D6 (read-only check) does not apply to them.
+static std::unique_ptr<L2COperand> createSysRegFromNumber(int64_t Imm, SMLoc S,
+                                                          SMLoc E) {
+  if (!isUInt<16>(Imm))
+    return nullptr;
+
+  StringRef Name; // only used for debug printing of the operand
+  if (const L2CSysReg::SysReg *Reg = L2CSysReg::lookupSysRegByEncoding(Imm))
+    Name = L2CSysReg::getSysRegStr(Reg->Name);
+
+  return L2COperand::createSysReg(Name, S, E, Imm, /*ParsedFromName=*/false);
+}
+
+ParseStatus L2CAsmParser::parseCSRSystemRegister(OperandVector &Operands) {
+  static constexpr const char *Msg =
+      "operand must be a valid system register name or an integer in the "
+      "range [0, 65535]";
+
+  SMLoc S = getParser().getTok().getLoc();
+  SMLoc E;
+
+  switch (getLexer().getKind()) {
+  default:
+    // Not something a CSR operand can start with. The generic parser takes
+    // over, and the matcher reports Msg through the DiagnosticString.
+    return ParseStatus::NoMatch;
+
+  case AsmToken::Identifier: {
+    StringRef Name = getParser().getTok().getIdentifier();
+    E = getParser().getTok().getEndLoc();
+
+    // A CSR name. The generated lookup ignores case; D5 requires exact case.
+    const L2CSysReg::SysReg *Reg = L2CSysReg::lookupSysRegByName(Name);
+    if (Reg && L2CSysReg::getSysRegStr(Reg->Name) == Name) {
+      Lex(); // consume the name
+      Operands.push_back(L2COperand::createSysReg(Name, S, E, Reg->Encoding,
+                                                  /*ParsedFromName=*/true));
+      return ParseStatus::Success;
+    }
+
+    // Not a CSR name: try it as an expression, e.g. a .set symbol.
+    [[fallthrough]];
+  }
+  case AsmToken::Integer:
+  case AsmToken::Minus:
+  case AsmToken::Plus:
+  case AsmToken::LParen:
+  case AsmToken::Tilde:
+  case AsmToken::Exclaim: {
+    const MCExpr *Res;
+    if (getParser().parseExpression(Res, E))
+      return ParseStatus::Failure;
+
+    // Folds constants and symbols already defined with .set/.equ.
+    int64_t Imm;
+    if (Res->evaluateAsAbsolute(Imm))
+      if (auto Op = createSysRegFromNumber(Imm, S, E)) {
+        Operands.push_back(std::move(Op));
+        return ParseStatus::Success;
+      }
+
+    return Error(S, Msg);
+  }
+  }
+}
+
 bool L2CAsmParser::parseInstruction(ParseInstructionInfo & /*Info*/,
                                     StringRef Name, SMLoc NameLoc,
                                     OperandVector &Operands) {
@@ -418,13 +538,31 @@ bool L2CAsmParser::matchAndEmitInstruction(SMLoc IdLoc, unsigned &Opcode,
 
   switch (Result) {
   case Match_Success:
+
+    // if it's a csrw instr, and if the sysreg was written by name, make sure
+    // it's not read only
+    if (Inst.getOpcode() == L2C::CSRW) {
+      auto &Op = static_cast<L2COperand &>(*Operands[1]);
+      if (Op.isSysReg() && Op.getSysReg().ParsedFromName) {
+        const L2CSysReg::SysReg *Reg =
+            L2CSysReg::lookupSysRegByEncoding(Op.getSysReg().Encoding);
+        if (Reg && Reg->ReadOnly)
+          return Error(Op.getStartLoc(),
+                       "cannot write read-only CSR '" +
+                           Twine(L2CSysReg::getSysRegStr(Reg->Name)) + "'");
+      }
+    }
+
     Out.emitInstruction(Inst, getSTI());
     Opcode = Inst.getOpcode();
     return false;
+
   case Match_MissingFeature:
     return Error(IdLoc, "instruction use requires option to be enabled");
+
   case Match_MnemonicFail:
     return Error(IdLoc, "unrecognized instruction mnemonic");
+
   case Match_InvalidOperand: {
     ErrorLoc = IdLoc;
     if (ErrorInfo != ~0ULL) {
@@ -437,6 +575,7 @@ bool L2CAsmParser::matchAndEmitInstruction(SMLoc IdLoc, unsigned &Opcode,
     }
     return Error(ErrorLoc, "invalid operand for instruction");
   }
+
   default:
     break;
   }

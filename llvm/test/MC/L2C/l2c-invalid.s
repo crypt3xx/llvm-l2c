@@ -30,7 +30,7 @@ andi a0, a0, 65536
 lui a0, 65536
 # CHECK: :[[@LINE-1]]:9: error: immediate must be an integer in the range [0, 65535]
 csrr a0, 65536
-# CHECK: :[[@LINE-1]]:10: error: immediate must be an integer in the range [0, 65535]
+# CHECK: :[[@LINE-1]]:10: error: operand must be a valid system register name or an integer in the range [0, 65535]
 slli a0, a0, 32
 # CHECK: :[[@LINE-1]]:14: error: immediate must be an integer in the range [0, 31]
 srai a0, a0, -1
@@ -67,3 +67,17 @@ jalr a0, a1, 32768
 # CHECK: :[[@LINE-1]]:14: error: immediate must be an integer in the range [-32768, 32767]
 jalr a0, 0(a1)
 # CHECK: :[[@LINE-1]]:10: error: register must be a GPR
+
+## Lesson 8: CSR operands
+csrr a0, foo
+# CHECK: :[[@LINE-1]]:10: error: operand must be a valid system register name or an integer in the range [0, 65535]
+csrr a0, -1
+# CHECK: :[[@LINE-1]]:10: error: operand must be a valid system register name or an integer in the range [0, 65535]
+csrw foo, a0
+# CHECK: :[[@LINE-1]]:6: error: operand must be a valid system register name or an integer in the range [0, 65535]
+csrw a0, a0
+# CHECK: :[[@LINE-1]]:6: error: operand must be a valid system register name or an integer in the range [0, 65535]
+csrr a0, a1
+# CHECK: :[[@LINE-1]]:10: error: operand must be a valid system register name or an integer in the range [0, 65535]
+csrr a0, Status
+# CHECK: :[[@LINE-1]]:10: error: operand must be a valid system register name or an integer in the range [0, 65535]
