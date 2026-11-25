@@ -5,13 +5,13 @@
 add a2, a0, a1
 # CHECK: add a2, a0, a1 # encoding: [0xc1,0x08,0x02,0x00]
 add r3, r1, r2
-# CHECK: add zero, zero, zero # encoding: [0x01,0x00,0x00,0x00]
+# CHECK: nop # encoding: [0x01,0x00,0x00,0x00]
 add r0, r0, r0
 # CHECK: add fp, fp, sp # encoding: [0x41,0xef,0x1e,0x00]
 add r29, r29, r30
 # CHECK: add ra, s0, t7 # encoding: [0xc1,0x8f,0x10,0x00]
 add r31, r17, r16
-# CHECK: sub a0, zero, a1 # encoding: [0x42,0x00,0x02,0x00]
+# CHECK: neg a0, a1 # encoding: [0x42,0x00,0x02,0x00]
 sub a0, zero, a1
 # CHECK: and t0, t1, t2 # encoding: [0x43,0x52,0x0b,0x00]
 and t0, t1, t2
@@ -49,7 +49,7 @@ addi a0, a0, 32767
 addi a0, a0, -32768
 # CHECK: slti a0, a1, -1 # encoding: [0x59,0x10,0xff,0xff]
 slti a0, a1, -1
-# CHECK: sltiu a0, a1, 1 # encoding: [0x5a,0x10,0x01,0x00]
+# CHECK: seqz a0, a1 # encoding: [0x5a,0x10,0x01,0x00]
 sltiu a0, a1, 1
 
 ## Immediate ALU, zero-extended uimm16
@@ -136,18 +136,13 @@ csrr a0, 12
 # CHECK: csrw 65535, t7 # encoding: [0x1d,0x80,0xff,0xff]
 csrw 65535, t7
 
-## CSR by variable symbol
-.set MYCSR, 8
+## Writes to read-only CSRs: accepted by number, printed by number (D6)
 # CHECK: csrw 8, a0 # encoding: [0x1d,0x08,0x08,0x00]
-csrw MYCSR, a0
-# CHECK: csrr a0, cycle # encoding: [0x5c,0x00,0x08,0x00]
-csrr a0, MYCSR
-
-# An expression involving a .set symbol
-# CHECK: csrr a0, cycleh # encoding: [0x5c,0x00,0x09,0x00]
-csrr a0, MYCSR + 1
-# CHECK: csrr a0, cycle # encoding: [0x5c,0x00,0x08,0x00]
-csrr a0, (4 + 4)
+csrw 8, a0
+# CHECK: csrw 11, t0 # encoding: [0x1d,0x48,0x0b,0x00]
+csrw 0x000B, t0
+# CHECK: csrw 7, zero # encoding: [0x1d,0x00,0x07,0x00]
+csrw 7, zero
 
 ## Loads, simm16 byte offset
 # CHECK: lw a5, -4(sp) # encoding: [0xa2,0xf1,0xfc,0xff]
@@ -166,7 +161,7 @@ lhu t0, 2(sp)
 beq r1, r2, -8
 # CHECK: beq a0, a1, 8 # encoding: [0xb0,0x08,0x02,0x00]
 beq a0, a1, 8
-# CHECK: bne a0, zero, 4 # encoding: [0x71,0x08,0x00,0x00]
+# CHECK: bnez a0, 4 # encoding: [0x71,0x08,0x00,0x00]
 bne a0, zero, 4
 # CHECK: blt t0, t1, 0 # encoding: [0x34,0x48,0x0a,0x00]
 blt t0, t1, 0
@@ -176,7 +171,7 @@ bge s0, s1, -4
 bltu a0, a1, 131068
 # CHECK: bgeu a0, a1, -131072 # encoding: [0x37,0x08,0x02,0x80]
 bgeu a0, a1, -131072
-# CHECK: beq zero, zero, 128 # encoding: [0x30,0x00,0x20,0x00]
+# CHECK: beqz zero, 128 # encoding: [0x30,0x00,0x20,0x00]
 beq zero, zero, 128
 
 ## Jumps, byte offset (spec delta D3)
@@ -194,7 +189,7 @@ jal 134217724
 j -134217728
 
 ## jalr, simm16 offset (no memory syntax)
-# CHECK: jalr zero, ra, 0 # encoding: [0x39,0xf8,0x00,0x00]
+# CHECK: ret # encoding: [0x39,0xf8,0x00,0x00]
 jalr r0, r31, 0
 # CHECK: jalr ra, t0, -4 # encoding: [0xf9,0x4f,0xfc,0xff]
 jalr ra, t0, -4
@@ -202,6 +197,95 @@ jalr ra, t0, -4
 jalr a0, a0, 32767
 # CHECK: jalr t0, t1, -32768 # encoding: [0x79,0x52,0x00,0x80]
 jalr t0, t1, -32768
+
+## Aliases (spec 9.2): assembler input -> printed alias, or the real instruction for bgt/ble/bgtu/bleu
+# CHECK: nop # encoding: [0x01,0x00,0x00,0x00]
+nop
+# CHECK: mv a0, a1 # encoding: [0x51,0x10,0x00,0x00]
+mv a0, a1
+# CHECK: mv t0, zero # encoding: [0x51,0x02,0x00,0x00]
+mv t0, zero
+# CHECK: neg a0, a1 # encoding: [0x42,0x00,0x02,0x00]
+neg a0, a1
+# CHECK: seqz a0, a1 # encoding: [0x5a,0x10,0x01,0x00]
+seqz a0, a1
+# CHECK: snez a0, a1 # encoding: [0x4a,0x00,0x02,0x00]
+snez a0, a1
+# CHECK: sltz a0, a1 # encoding: [0x49,0x10,0x00,0x00]
+sltz a0, a1
+# CHECK: sgtz a0, a1 # encoding: [0x49,0x00,0x02,0x00]
+sgtz a0, a1
+# CHECK: beqz a0, 8 # encoding: [0xb0,0x08,0x00,0x00]
+beqz a0, 8
+# CHECK: bnez a0, -8 # encoding: [0xb1,0x0f,0xe0,0xff]
+bnez a0, -8
+# CHECK: bltz a0, 8 # encoding: [0xb4,0x08,0x00,0x00]
+bltz a0, 8
+# CHECK: bgez a0, 8 # encoding: [0xb5,0x08,0x00,0x00]
+bgez a0, 8
+# CHECK: blez a0, 8 # encoding: [0xb5,0x00,0x01,0x00]
+blez a0, 8
+# CHECK: bgtz a0, 8 # encoding: [0xb4,0x00,0x01,0x00]
+bgtz a0, 8
+# CHECK: blt a1, a0, 8 # encoding: [0xb4,0x10,0x01,0x00]
+bgt a0, a1, 8
+# CHECK: bge a1, a0, 8 # encoding: [0xb5,0x10,0x01,0x00]
+ble a0, a1, 8
+# CHECK: bltu a1, a0, 8 # encoding: [0xb6,0x10,0x01,0x00]
+bgtu a0, a1, 8
+# CHECK: bgeu a1, a0, 8 # encoding: [0xb7,0x10,0x01,0x00]
+bleu a0, a1, 8
+# CHECK: jr t0 # encoding: [0x39,0x48,0x00,0x00]
+jr t0
+# CHECK: jalr t0 # encoding: [0xf9,0x4f,0x00,0x00]
+jalr t0
+# CHECK: jalr ra # encoding: [0xf9,0xff,0x00,0x00]
+jalr ra
+# CHECK: ret # encoding: [0x39,0xf8,0x00,0x00]
+ret
+
+## li (spec 9.2): shortest expansion; the value is taken modulo 2^32 first
+# CHECK: mv a0, zero # encoding: [0x51,0x00,0x00,0x00]
+li a0, 0
+# CHECK: addi a0, zero, 5 # encoding: [0x51,0x00,0x05,0x00]
+li a0, 5
+# CHECK: addi a0, zero, -1 # encoding: [0x51,0x00,0xff,0xff]
+li a0, -1
+# CHECK: addi a0, zero, 32767 # encoding: [0x51,0x00,0xff,0x7f]
+li a0, 32767
+# CHECK: addi a0, zero, -32768 # encoding: [0x51,0x00,0x00,0x80]
+li a0, -32768
+# CHECK: ori a0, zero, 32768 # encoding: [0x54,0x00,0x00,0x80]
+li a0, 32768
+# CHECK: ori a0, zero, 65535 # encoding: [0x54,0x00,0xff,0xff]
+li a0, 65535
+# CHECK: lui a0, 1 # encoding: [0x50,0x00,0x01,0x00]
+li a0, 65536
+# CHECK: lui a0, 4660 # encoding: [0x50,0x00,0x34,0x12]
+# CHECK-NEXT: ori a0, a0, 22136 # encoding: [0x54,0x08,0x78,0x56]
+li a0, 0x12345678
+# CHECK: lui a0, 65535 # encoding: [0x50,0x00,0xff,0xff]
+# CHECK-NEXT: ori a0, a0, 32767 # encoding: [0x54,0x08,0xff,0x7f]
+li a0, -32769
+# CHECK: addi a0, zero, -1 # encoding: [0x51,0x00,0xff,0xff]
+li a0, 0xFFFFFFFF
+# CHECK: lui a0, 32768 # encoding: [0x50,0x00,0x00,0x80]
+li a0, 0x80000000
+# CHECK: lui a0, 32768 # encoding: [0x50,0x00,0x00,0x80]
+li a0, -2147483648
+# CHECK: lui a0, 32767 # encoding: [0x50,0x00,0xff,0x7f]
+# CHECK-NEXT: ori a0, a0, 65535 # encoding: [0x54,0x08,0xff,0xff]
+li a0, 2147483647
+# CHECK: lui t0, 65535 # encoding: [0x50,0x02,0xff,0xff]
+li t0, 0xFFFF0000
+
+## not (spec 9.2): sub + addi, safe when rd == rs
+# CHECK: neg a0, a1 # encoding: [0x42,0x00,0x02,0x00]
+# CHECK-NEXT: addi a0, a0, -1 # encoding: [0x51,0x08,0xff,0xff]
+not a0, a1
+# CHECK: neg a0, a0 # encoding: [0x42,0x00,0x01,0x00]
+# CHECK-NEXT: addi a0, a0, -1 # encoding: [0x51,0x08,0xff,0xff]
+not a0, a0
 
 ## Stores, split simm16 byte offset
 # CHECK: sw a1, 8(sp) # encoding: [0x2a,0xf2,0x02,0x00]
@@ -216,6 +300,17 @@ sh a0, 32(a1)
 sw ra, -32768(sp)
 # CHECK: sb zero, 32767(t0) # encoding: [0xe8,0x4f,0xe0,0x7f]
 sb zero, 32767(t0)
+
+## .set symbols as CSR operands count as numbers (D5, D6)
+.set MYCSR, 8
+# CHECK: csrw 8, a0 # encoding: [0x1d,0x08,0x08,0x00]
+csrw MYCSR, a0
+# CHECK: csrr a0, cycle # encoding: [0x5c,0x00,0x08,0x00]
+csrr a0, MYCSR
+# CHECK: csrr a0, cycleh # encoding: [0x5c,0x00,0x09,0x00]
+csrr a0, MYCSR + 1
+# CHECK: csrr a0, cycle # encoding: [0x5c,0x00,0x08,0x00]
+csrr a0, (4 + 4)
 
 ## ';' separates statements (spec delta D1)
 # CHECK:      add a0, a1, a2 # encoding: [0x41,0x10,0x03,0x00]

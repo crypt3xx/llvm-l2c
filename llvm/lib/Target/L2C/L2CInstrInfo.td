@@ -8,7 +8,7 @@ include "L2CInstrFormats.td"
 def SImm16AsmOperand : AsmOperandClass {
     let Name = "SImm16";
     let RenderMethod = "addImmOperands";
-    let DiagnosticType = "InvalidSImm16";
+    let DiagnosticType = !strconcat("Invalid", Name);
     let DiagnosticString = "immediate must be an integer in the range [-32768, 32767]";
 }
 def simm16 : Operand<i32> {
@@ -20,7 +20,7 @@ def simm16 : Operand<i32> {
 def UImm16AsmOperand : AsmOperandClass {
     let Name = "UImm16";
     let RenderMethod = "addImmOperands";
-    let DiagnosticType = "InvalidUImm16";
+    let DiagnosticType = !strconcat("Invalid", Name);
     let DiagnosticString = "immediate must be an integer in the range [0, 65535]";
 }
 def uimm16 : Operand<i32> {
@@ -32,7 +32,7 @@ def uimm16 : Operand<i32> {
 def UImm5AsmOperand : AsmOperandClass {
     let Name = "UImm5";
     let RenderMethod = "addImmOperands";
-    let DiagnosticType = "InvalidUImm5";
+    let DiagnosticType = !strconcat("Invalid", Name);
     let DiagnosticString = "immediate must be an integer in the range [0, 31]";
 }
 def uimm5 : Operand<i32> {
@@ -44,7 +44,7 @@ def uimm5 : Operand<i32> {
 def BrTarget16AsmOperand : AsmOperandClass {
     let Name = "BrTarget16";
     let RenderMethod = "addImmOperands";
-    let DiagnosticType = "InvalidBrTarget16";
+    let DiagnosticType = !strconcat("Invalid", Name);
     let DiagnosticString = "branch target must be a multiple of 4 in the range [-131072, 131068]";
 }
 def brtarget16 : Operand<i32> {
@@ -59,7 +59,7 @@ def brtarget16 : Operand<i32> {
 def JmpTarget26AsmOperand : AsmOperandClass {
     let Name = "JmpTarget26";
     let RenderMethod = "addImmOperands";
-    let DiagnosticType = "InvalidJmpTarget26";
+    let DiagnosticType = !strconcat("Invalid", Name);
     let DiagnosticString = "jump target must be a multiple of 4 in the range [-134217728, 134217724]";
 }
 def jmptarget26 : Operand<i32> {
@@ -76,13 +76,24 @@ def CSRSysRegAsmOperand : AsmOperandClass {
     // let PredicateMethod = "isUImm16";
     let ParserMethod = "parseCSRSystemRegister";
     let RenderMethod = "addSysRegOperands";
-    let DiagnosticType = "InvalidCSRSysReg";
+    let DiagnosticType = !strconcat("Invalid", Name);
     let DiagnosticString = "operand must be a valid system register name or an integer in the range [0, 65535]";
 }
 def csr_sysreg : Operand<i32> {
     let ParserMatchClass = CSRSysRegAsmOperand;
     let DecoderMethod = "decodeUImm16";
     let PrintMethod = "printCSRSystemRegister";
+}
+
+// Load Immediate for Pseudo Instructions
+def LIImmAsmOperand : AsmOperandClass {
+    let Name = "LIImm";
+    let RenderMethod = "addImmOperands";
+    let DiagnosticType = !strconcat("Invalid", Name);
+    let DiagnosticString = "immediate must be an integer in the range [-2147483648, 4294967295]";
+}
+def li_imm : Operand<i32> {
+    let ParserMatchClass = LIImmAsmOperand;
 }
 
 
@@ -292,3 +303,39 @@ def JALR : L2CInstI<0b111001, (outs GPR:$rd), (ins GPR:$rs1, simm16:$imm16), "ja
     let mayLoad = 0;
     let mayStore = 0;
 }
+
+
+// Alias Instructions
+
+def : InstAlias<"nop", (ADD R0, R0, R0), 1>;
+
+def : InstAlias<"mv $rd, $rs",   (ADDI  GPR:$rd,  GPR:$rs,  0       )>;
+def : InstAlias<"neg $rd, $rs",  (SUB   GPR:$rd,  R0,       GPR:$rs )>;
+def : InstAlias<"seqz $rd, $rs", (SLTIU GPR:$rd,  GPR:$rs,  1       )>;
+def : InstAlias<"snez $rd, $rs", (SLTU  GPR:$rd,  R0,       GPR:$rs )>;
+def : InstAlias<"sltz $rd, $rs", (SLT   GPR:$rd,  GPR:$rs,  R0      )>;
+def : InstAlias<"sgtz $rd, $rs", (SLT   GPR:$rd,  R0,       GPR:$rs )>;
+
+
+def : InstAlias<"beqz $rs, $imm16", (BEQ  GPR:$rs,  R0,      brtarget16:$imm16 )>;
+def : InstAlias<"bnez $rs, $imm16", (BNE  GPR:$rs,  R0,      brtarget16:$imm16 )>;
+def : InstAlias<"bltz $rs, $imm16", (BLT  GPR:$rs,  R0,      brtarget16:$imm16 )>;
+def : InstAlias<"bgez $rs, $imm16", (BGE  GPR:$rs,  R0,      brtarget16:$imm16 )>;
+def : InstAlias<"blez $rs, $imm16", (BGE  R0,       GPR:$rs, brtarget16:$imm16 )>;
+def : InstAlias<"bgtz $rs, $imm16", (BLT  R0,       GPR:$rs, brtarget16:$imm16 )>;
+
+def : InstAlias<"bgt $rs, $rt, $imm16",  (BLT  GPR:$rt, GPR:$rs, brtarget16:$imm16), 0>;
+def : InstAlias<"ble $rs, $rt, $imm16",  (BGE  GPR:$rt, GPR:$rs, brtarget16:$imm16), 0>;
+def : InstAlias<"bgtu $rs, $rt, $imm16", (BLTU GPR:$rt, GPR:$rs, brtarget16:$imm16), 0>;
+def : InstAlias<"bleu $rs, $rt, $imm16", (BGEU GPR:$rt, GPR:$rs, brtarget16:$imm16), 0>;
+
+def : InstAlias<"jalr $rs", (JALR R31, GPR:$rs, 0), 1>;
+def : InstAlias<"jr $rs",   (JALR R0,  GPR:$rs, 0), 1>;
+def : InstAlias<"ret",      (JALR R0,  R31,     0), 2>;
+
+
+// Pseudo Instructions
+
+def PseudoLI  : PseudoInst<(outs GPR:$rd), (ins li_imm:$imm), "li",  "$rd, $imm">;
+def PseudoNOT : PseudoInst<(outs GPR:$rd), (ins GPR:$rs),     "not", "$rd, $rs">;
+

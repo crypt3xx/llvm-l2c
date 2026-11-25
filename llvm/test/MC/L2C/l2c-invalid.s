@@ -81,3 +81,29 @@ csrr a0, a1
 # CHECK: :[[@LINE-1]]:10: error: operand must be a valid system register name or an integer in the range [0, 65535]
 csrr a0, Status
 # CHECK: :[[@LINE-1]]:10: error: operand must be a valid system register name or an integer in the range [0, 65535]
+csrw cycle, a0
+# CHECK: :[[@LINE-1]]:6: error: cannot write read-only CSR 'cycle'
+csrw ip, a0
+# CHECK: :[[@LINE-1]]:6: error: cannot write read-only CSR 'ip'
+csrw instreth, t0
+# CHECK: :[[@LINE-1]]:6: error: cannot write read-only CSR 'instreth'
+
+## Lesson 9: aliases and pseudo-instructions
+nop a0
+# CHECK: :[[@LINE-1]]:5: error: invalid operand for instruction
+ret a0
+# CHECK: :[[@LINE-1]]:5: error: invalid operand for instruction
+mv a0, 5
+# CHECK: :[[@LINE-1]]:8: error: register must be a GPR
+beqz a0, 6
+# CHECK: :[[@LINE-1]]:10: error: branch target must be a multiple of 4 in the range [-131072, 131068]
+bgt a0, a1, 131072
+# CHECK: :[[@LINE-1]]:13: error: branch target must be a multiple of 4 in the range [-131072, 131068]
+li a0, a1
+# CHECK: :[[@LINE-1]]:8: error: immediate must be an integer in the range [-2147483648, 4294967295]
+li a0, 4294967296
+# CHECK: :[[@LINE-1]]:8: error: immediate must be an integer in the range [-2147483648, 4294967295]
+li a0, -2147483649
+# CHECK: :[[@LINE-1]]:8: error: immediate must be an integer in the range [-2147483648, 4294967295]
+not a0, 5
+# CHECK: :[[@LINE-1]]:9: error: register must be a GPR

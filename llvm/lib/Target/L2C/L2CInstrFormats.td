@@ -16,6 +16,25 @@ class L2CInst<bits<6> opcode, dag outs, dag ins, string opcodestr, string argstr
     let Pattern = pattern;
 }
 
+class PseudoInst<dag outs, dag ins, string opcodestr = "", string argstr = "", list<dag> pattern = []>
+        : Instruction
+{
+    let Namespace = "L2C";
+    
+    dag OutOperandList = outs;
+    dag InOperandList = ins;
+    let AsmString = opcodestr # !if(!empty(argstr), "", "\t" # argstr);
+    let Pattern = pattern;
+
+    let isPseudo = 1;
+    let isCodeGenOnly = 0;
+    let isAsmParserOnly = 1;
+
+    let hasSideEffects = 0;
+    let mayLoad = 0;
+    let mayStore = 0;
+}
+
 class L2CInstR<bits<6> opcode, dag outs, dag ins, string opcodestr, string argstr, list<dag> pattern>
         : L2CInst<opcode, outs, ins, opcodestr, argstr, pattern>
 {

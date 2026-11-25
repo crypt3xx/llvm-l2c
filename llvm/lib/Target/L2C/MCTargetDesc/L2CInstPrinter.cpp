@@ -11,7 +11,9 @@ using namespace llvm;
 #define DEBUG_TYPE "asm-printer"
 
 // Include the auto-generated portion of the assembly writer.
+#define PRINT_ALIAS_INSTR
 #include "L2CGenAsmWriter.inc"
+#undef PRINT_ALIAS_INSTR
 
 L2CInstPrinter::L2CInstPrinter(const MCAsmInfo &MAI, const MCInstrInfo &MII,
                                const MCRegisterInfo &MRI)
@@ -20,7 +22,8 @@ L2CInstPrinter::L2CInstPrinter(const MCAsmInfo &MAI, const MCInstrInfo &MII,
 void L2CInstPrinter::printInst(const MCInst *MI, uint64_t Address,
                                StringRef Annot, const MCSubtargetInfo &STI,
                                raw_ostream &O) {
-  printInstruction(MI, Address, STI, O);
+  if (!printAliasInstr(MI, Address, STI, O))
+    printInstruction(MI, Address, STI, O);
   printAnnotation(O, Annot);
 }
 

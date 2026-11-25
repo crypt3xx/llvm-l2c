@@ -9,11 +9,13 @@
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
+#include "llvm/MC/MCInstBuilder.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCParser/AsmLexer.h"
 #include "llvm/MC/MCParser/MCAsmParser.h"
 #include "llvm/MC/MCParser/MCParsedAsmOperand.h"
 #include "llvm/MC/MCParser/MCTargetAsmParser.h"
+#include "llvm/MC/MCRegister.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCSymbol.h"
@@ -194,6 +196,11 @@ public:
   }
 
   bool isCSRSysReg() const { return isSysReg(); }
+
+  bool isLIImm() const {
+    int64_t V;
+    return getConstantImm(V) && (isInt<32>(V) || isUInt<32>(V));
+  }
 
   void addRegOperands(MCInst &Inst, unsigned N) const {
     assert(N == 1 && "Invalid number of operands!");
@@ -537,8 +544,7 @@ bool L2CAsmParser::matchAndEmitInstruction(SMLoc IdLoc, unsigned &Opcode,
       MatchInstructionImpl(Operands, Inst, ErrorInfo, MatchingInlineAsm);
 
   switch (Result) {
-  case Match_Success:
-
+  case Match_Success: {
     // if it's a csrw instr, and if the sysreg was written by name, make sure
     // it's not read only
     if (Inst.getOpcode() == L2C::CSRW) {
@@ -553,10 +559,56 @@ bool L2CAsmParser::matchAndEmitInstruction(SMLoc IdLoc, unsigned &Opcode,
       }
     }
 
-    Out.emitInstruction(Inst, getSTI());
-    Opcode = Inst.getOpcode();
-    return false;
+    switch (Inst.getOpcode()) {
+    case L2C::PseudoLI: {
 
+      MCRegister Rd = Inst.getOperand(0).getReg();
+      int64_t Imm = Inst.getOperand(1).getImm();
+
+      int64_t V = SignExtend64<32>(Imm);
+
+      if (isInt<16>(V)) {
+        Out.emitInstruction(
+            MCInstBuilder(L2C::ADDI).addReg(Rd).addReg(L2C::R0).addImm(V),
+            getSTI());
+        return false;
+      }
+
+      if (isUInt<16>(V)) {
+        Out.emitInstruction(
+            MCInstBuilder(L2C::ORI).addReg(Rd).addReg(L2C::R0).addImm(V),
+            getSTI());
+        return false;
+      }
+
+      int64_t Hi = (V >> 16) & 0xFFFF;
+      int64_t Lo = V & 0xFFFF;
+      Out.emitInstruction(MCInstBuilder(L2C::LUI).addReg(Rd).addImm(Hi),
+                          getSTI());
+      if (Lo != 0)
+        Out.emitInstruction(
+            MCInstBuilder(L2C::ORI).addReg(Rd).addReg(Rd).addImm(Lo), getSTI());
+
+      return false;
+    }
+    case L2C::PseudoNOT: {
+
+      MCRegister Rd = Inst.getOperand(0).getReg();
+      MCRegister Rs = Inst.getOperand(1).getReg();
+
+      Out.emitInstruction(
+          MCInstBuilder(L2C::SUB).addReg(Rd).addReg(L2C::R0).addReg(Rs),
+          getSTI());
+      Out.emitInstruction(
+          MCInstBuilder(L2C::ADDI).addReg(Rd).addReg(Rd).addImm(-1), getSTI());
+
+      return false;
+    }
+    }
+
+    Out.emitInstruction(Inst, getSTI());
+    return false;
+  }
   case Match_MissingFeature:
     return Error(IdLoc, "instruction use requires option to be enabled");
 
