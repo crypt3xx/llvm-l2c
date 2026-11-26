@@ -944,6 +944,11 @@ enum {
 #include "ELFRelocs/NanoMips.def"
 };
 
+// ELF Relocation type for L2C.
+enum {
+#include "ELFRelocs/L2C.def"
+};
+
 #undef ELF_RELOC
 
 // Section header.

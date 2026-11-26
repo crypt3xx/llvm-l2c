@@ -5,28 +5,27 @@
 
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCInstrInfo.h"
-// #include "llvm/MC/MCRegisterInfo.h"
-// #include "llvm/MC/MCTargetOptions.h"
-// #include "llvm/Support/DataTypes.h"
+#include "llvm/MC/MCRegisterInfo.h"
+#include "llvm/MC/MCTargetOptions.h"
+#include <memory>
 
 namespace llvm {
 class MCCodeEmitter;
-// class MCAsmBackend;
-// class MCContext;
-// class MCInstrInfo;
-// class MCObjectTargetWriter;
-// class MCSubtargetInfo;
-// class Target;
+class MCAsmBackend;
+class MCContext;
+class MCInstrInfo;
+class MCObjectTargetWriter;
+class MCSubtargetInfo;
+class Target;
 
 MCCodeEmitter *createL2CMCCodeEmitter(const MCInstrInfo &MCII, MCContext &Ctx);
 
-// MCAsmBackend *createLanaiAsmBackend(const Target &T, const MCSubtargetInfo
-// &STI,
-//                                     const MCRegisterInfo &MRI,
-//                                     const MCTargetOptions &Options);
+MCAsmBackend *createL2CAsmBackend(const Target &T, const MCSubtargetInfo &STI,
+                                  const MCRegisterInfo &MRI,
+                                  const MCTargetOptions &Options);
 
-// std::unique_ptr<MCObjectTargetWriter> createLanaiELFObjectWriter(uint8_t
-// OSABI);
+std::unique_ptr<MCObjectTargetWriter> createL2CELFObjectWriter(uint8_t OSABI);
+
 } // namespace llvm
 
 #define GET_REGINFO_ENUM

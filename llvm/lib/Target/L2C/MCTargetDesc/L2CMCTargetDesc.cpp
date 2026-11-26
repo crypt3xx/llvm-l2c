@@ -4,10 +4,12 @@
 #include "L2CInstPrinter.h"
 #include "L2CMCAsmInfo.h"
 #include "TargetInfo/L2CTargetInfo.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstrAnalysis.h"
+#include "llvm/MC/MCInstrDesc.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCStreamer.h"
@@ -16,6 +18,7 @@
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/TargetParser/Triple.h"
+#include <cstdint>
 #include <string>
 
 #define GET_INSTRINFO_MC_DESC
@@ -63,63 +66,44 @@ static MCInstPrinter *createL2CMCInstPrinter(const Triple &T, unsigned,
   return new L2CInstPrinter(MAI, MII, MRI);
 }
 
-// static MCStreamer *createMCStreamer(const Triple &T, MCContext &Context,
-//                                     std::unique_ptr<MCAsmBackend> &&MAB,
-//                                     std::unique_ptr<MCObjectWriter> &&OW,
-//                                     std::unique_ptr<MCCodeEmitter> &&Emitter)
-//                                     {
-//   if (!T.isOSBinFormatELF())
-//     llvm_unreachable("OS not supported");
+namespace {
 
-//   return createELFStreamer(Context, std::move(MAB), std::move(OW),
-//                            std::move(Emitter));
-// }
+class L2CMCInstrAnalysis : public MCInstrAnalysis {
+public:
+  explicit L2CMCInstrAnalysis(const MCInstrInfo *Info)
+      : MCInstrAnalysis(Info) {}
 
-// static MCRelocationInfo *createLanaiElfRelocation(const Triple &TheTriple,
-//                                                   MCContext &Ctx) {
-//   return createMCRelocationInfo(TheTriple, Ctx);
-// }
+  bool evaluateBranch(const MCInst &Inst, uint64_t Addr, uint64_t Size,
+                      uint64_t &Target) const override {
+    if (Inst.getNumOperands() == 0)
+      return false;
 
-// namespace {
+    if (!isConditionalBranch(Inst) && !isUnconditionalBranch(Inst) &&
+        !isCall(Inst))
+      return false;
 
-// class LanaiMCInstrAnalysis : public MCInstrAnalysis {
-// public:
-//   explicit LanaiMCInstrAnalysis(const MCInstrInfo *Info)
-//       : MCInstrAnalysis(Info) {}
+    for (auto [Idx, Op] : enumerate(Info->get(Inst.getOpcode()).operands())) {
+      if (Op.OperandType != MCOI::OPERAND_PCREL)
+        continue;
 
-//   bool evaluateBranch(const MCInst &Inst, uint64_t Addr, uint64_t Size,
-//                       uint64_t &Target) const override {
-//     if (Inst.getNumOperands() == 0)
-//       return false;
-//     if (!isConditionalBranch(Inst) && !isUnconditionalBranch(Inst) &&
-//         !isCall(Inst))
-//       return false;
+      const MCOperand &MO = Inst.getOperand(Idx);
 
-//     if (Info->get(Inst.getOpcode()).operands()[0].OperandType ==
-//         MCOI::OPERAND_PCREL) {
-//       int64_t Imm = Inst.getOperand(0).getImm();
-//       Target = Addr + Size + Imm;
-//       return true;
-//     } else {
-//       int64_t Imm = Inst.getOperand(0).getImm();
+      if (!MO.isImm())
+        return false;
 
-//       // Skip case where immediate is 0 as that occurs in file that isn't
-//       linked
-//       // and the branch target inferred would be wrong.
-//       if (Imm == 0)
-//         return false;
+      Target = static_cast<uint32_t>(Addr + MO.getImm());
+      return true;
+    }
 
-//       Target = Imm;
-//       return true;
-//     }
-//   }
-// };
+    return false;
+  }
+};
 
-// } // end anonymous namespace
+} // end anonymous namespace
 
-// static MCInstrAnalysis *createLanaiInstrAnalysis(const MCInstrInfo *Info) {
-//   return new LanaiMCInstrAnalysis(Info);
-// }
+static MCInstrAnalysis *createL2CInstrAnalysis(const MCInstrInfo *Info) {
+  return new L2CMCInstrAnalysis(Info);
+}
 
 extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void
 LLVMInitializeL2CTargetMC() { // NOLINT(readability-identifier-naming)
@@ -146,17 +130,9 @@ LLVMInitializeL2CTargetMC() { // NOLINT(readability-identifier-naming)
                                         createL2CMCCodeEmitter);
 
   // Register the ASM Backend
-  //   TargetRegistry::RegisterMCAsmBackend(getTheL2CTarget(),
-  //                                        createLanaiAsmBackend);
-
-  // Register the ELF streamer.
-  //   TargetRegistry::RegisterELFStreamer(getTheL2CTarget(), createMCStreamer);
-
-  // Register the MC relocation info.
-  //   TargetRegistry::RegisterMCRelocationInfo(getTheL2CTarget(),
-  //                                            createLanaiElfRelocation);
+  TargetRegistry::RegisterMCAsmBackend(getTheL2CTarget(), createL2CAsmBackend);
 
   // Register the MC instruction analyzer.
-  //   TargetRegistry::RegisterMCInstrAnalysis(getTheL2CTarget(),
-  //                                           createLanaiInstrAnalysis);
+  TargetRegistry::RegisterMCInstrAnalysis(getTheL2CTarget(),
+                                          createL2CInstrAnalysis);
 }

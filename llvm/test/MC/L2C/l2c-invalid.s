@@ -6,7 +6,7 @@ add a2, a0
 add a2, a0, 5
 # CHECK: :[[@LINE-1]]:13: error: register must be a GPR
 add a2, a0, x9
-# CHECK: :[[@LINE-1]]:13: error: unknown operand
+# CHECK: :[[@LINE-1]]:13: error: register must be a GPR
 foo a0
 # CHECK: :[[@LINE-1]]:1: error: unrecognized instruction mnemonic
 add a0 a1 a2

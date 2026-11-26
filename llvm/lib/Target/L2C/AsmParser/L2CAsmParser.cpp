@@ -6,6 +6,7 @@
 #include "TargetInfo/L2CTargetInfo.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
+#include "llvm/MC/MCAsmMacro.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
@@ -74,6 +75,9 @@ public:
                const MCInstrInfo &MII)
       : MCTargetAsmParser(STI, MII), Parser(Parser), Lexer(Parser.getLexer()) {
     setAvailableFeatures(ComputeAvailableFeatures(getSTI().getFeatureBits()));
+    Parser.addAliasForDirective(".half", ".2byte");
+    Parser.addAliasForDirective(".hword", ".2byte");
+    Parser.addAliasForDirective(".word", ".4byte");
   }
 
 private:
@@ -186,13 +190,21 @@ public:
   }
 
   bool isBrTarget16() const {
+    if (!isImm())
+      return false;
     int64_t V;
-    return getConstantImm(V) && (V % 4 == 0) && isInt<18>(V);
+    if (getConstantImm(V))
+      return V % 4 == 0 && isInt<18>(V);
+    return true; // symbol: range is checked when the fixup is applied
   }
 
   bool isJmpTarget26() const {
+    if (!isImm())
+      return false;
     int64_t V;
-    return getConstantImm(V) && (V % 4 == 0) && isInt<28>(V);
+    if (getConstantImm(V))
+      return V % 4 == 0 && isInt<28>(V);
+    return true; // symbol: range is checked when the fixup is applied
   }
 
   bool isCSRSysReg() const { return isSysReg(); }
@@ -391,11 +403,14 @@ std::unique_ptr<L2COperand> L2CAsmParser::parseImmediate() {
   SMLoc EndLoc;
 
   const MCExpr *ExprVal;
+
   switch (Lexer.getKind()) {
   case AsmToken::Plus:
   case AsmToken::Minus:
   case AsmToken::Integer:
-  case AsmToken::Dot: {
+  case AsmToken::Dot:
+  case AsmToken::Identifier:
+  case AsmToken::Tilde: {
     if (!Parser.parseExpression(ExprVal, EndLoc))
       return L2COperand::createImm(ExprVal, StartLoc, EndLoc);
     [[fallthrough]];

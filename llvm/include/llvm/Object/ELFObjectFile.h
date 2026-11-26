@@ -1326,6 +1326,8 @@ StringRef ELFObjectFile<ELFT>::getFileFormatName() const {
       return "elf32-xtensa";
     case ELF::EM_NANOMIPS:
       return "elf32-nanomips";
+    case ELF::EM_L2C:
+      return "elf32-l2c";
     default:
       return "elf32-unknown";
     }
@@ -1461,6 +1463,9 @@ template <class ELFT> Triple::ArchType ELFObjectFile<ELFT>::getArch() const {
 
   case ELF::EM_NANOMIPS:
     return Triple::nanomips;
+
+  case ELF::EM_L2C:
+    return Triple::l2c;
 
   default:
     return Triple::UnknownArch;

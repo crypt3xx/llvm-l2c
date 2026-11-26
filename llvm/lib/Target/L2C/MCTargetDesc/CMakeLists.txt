@@ -6,6 +6,8 @@ add_llvm_component_library(LLVML2CDesc
   L2CInstPrinter.cpp
   L2CMCCodeEmitter.cpp
   L2CBaseInfo.cpp
+  L2CAsmBackend.cpp
+  L2CELFObjectWriter.cpp
 
   LINK_COMPONENTS
   MC

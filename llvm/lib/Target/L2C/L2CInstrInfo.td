@@ -65,7 +65,7 @@ def JmpTarget26AsmOperand : AsmOperandClass {
 def jmptarget26 : Operand<i32> {
     let ParserMatchClass = JmpTarget26AsmOperand;
     let DecoderMethod = "decodeSImmLsl2<26>";
-    let EncoderMethod = "getBranchTargetOpValue";
+    let EncoderMethod = "getJumpTargetOpValue";
     let OperandType = "OPERAND_PCREL";
     let PrintMethod = "printBranchOperand";
 }

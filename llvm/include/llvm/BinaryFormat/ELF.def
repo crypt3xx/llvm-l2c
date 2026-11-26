@@ -229,5 +229,6 @@ ELF_MACHINE(EM_AIECTRLCODE,   269, "aiectrlcode", "AMD/Xilinx AIEngine ctrlcode"
 ELF_MACHINE(EM_PPU,           270, "ppu", "T-Head PPU")
 ELF_MACHINE(EM_LST,           271, "lst", "Lisuan Technology LST")
 ELF_MACHINE(EM_CHILI,         272, "chili", "OpenAI Chili architecture")
+ELF_MACHINE(EM_L2C,        0x4C32, "l2c", "L2C processor")
 #undef ELF_MACHINE
 #endif

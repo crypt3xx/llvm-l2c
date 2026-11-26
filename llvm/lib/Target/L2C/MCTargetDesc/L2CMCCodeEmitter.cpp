@@ -1,5 +1,6 @@
 // L2CMCCodeEmitter.cpp
 
+#include "MCTargetDesc/L2CFixupKinds.h"
 #include "MCTargetDesc/L2CMCTargetDesc.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/MC/MCCodeEmitter.h"
@@ -39,11 +40,14 @@ public:
                              SmallVectorImpl<MCFixup> &Fixups,
                              const MCSubtargetInfo &SubtargetInfo) const;
 
-  // Encoder for Branchs/Jumps Operands (see brtarget16 and jmptarget26 in
-  // L2CInstrInfo.td)
+  // Encoder for Branchs Operands (see brtarget16 in L2CInstrInfo.td)
   unsigned getBranchTargetOpValue(const MCInst &MI, unsigned OpNo,
                                   SmallVectorImpl<MCFixup> &Fixups,
                                   const MCSubtargetInfo &STI) const;
+  // Encoder for Jumps Operands (see jmptarget26 in L2CInstrInfo.td)
+  unsigned getJumpTargetOpValue(const MCInst &MI, unsigned OpNo,
+                                SmallVectorImpl<MCFixup> &Fixups,
+                                const MCSubtargetInfo &STI) const;
 
   void encodeInstruction(const MCInst &Inst, SmallVectorImpl<char> &CB,
                          SmallVectorImpl<MCFixup> &Fixups,
@@ -69,7 +73,21 @@ unsigned L2CMCCodeEmitter::getMachineOpValue(
   if (MCOp.isImm())
     return MCOp.getImm();
 
-  report_fatal_error("fixups not supported for yet");
+  report_fatal_error("unexpected expression operand");
+  return 0;
+}
+
+static uint64_t getPCRelTargetOpValue(const MCInst &MI, unsigned OpNo,
+                                      SmallVectorImpl<MCFixup> &Fixups,
+                                      MCFixupKind Kind) {
+  const MCOperand &MO = MI.getOperand(OpNo);
+
+  if (MO.isImm()) // If it's a constant return its encoding (shifter right by 2)
+    return static_cast<uint64_t>(MO.getImm() >> 2);
+
+  assert(MO.isExpr() && "branch target must be an immediate or expression");
+  Fixups.push_back(MCFixup::create(/*Offset=*/0, MO.getExpr(), Kind,
+                                   /*PCRel=*/true));
   return 0;
 }
 
@@ -77,13 +95,14 @@ unsigned
 L2CMCCodeEmitter::getBranchTargetOpValue(const MCInst &MI, unsigned OpNo,
                                          SmallVectorImpl<MCFixup> &Fixups,
                                          const MCSubtargetInfo &STI) const {
-  const MCOperand &MO = MI.getOperand(OpNo);
+  return getPCRelTargetOpValue(MI, OpNo, Fixups, L2C::fixup_l2c_branch16);
+}
 
-  if (MO.isImm())
-    return static_cast<unsigned>(MO.getImm() >> 2);
-
-  report_fatal_error("Unhandled expression!");
-  return 0;
+unsigned
+L2CMCCodeEmitter::getJumpTargetOpValue(const MCInst &MI, unsigned OpNo,
+                                       SmallVectorImpl<MCFixup> &Fixups,
+                                       const MCSubtargetInfo &STI) const {
+  return getPCRelTargetOpValue(MI, OpNo, Fixups, L2C::fixup_l2c_jump26);
 }
 
 void L2CMCCodeEmitter::encodeInstruction(
