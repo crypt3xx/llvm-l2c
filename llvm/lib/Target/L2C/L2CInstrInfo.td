@@ -120,6 +120,17 @@ def li_imm : Operand<i32> {
     let ParserMatchClass = LIImmAsmOperand;
 }
 
+// Bare Symbol operand for the LA, CALL and TAIL instructions
+def BareSymbolAsmOperand : AsmOperandClass {
+    let Name = "BareSymbol";
+    let RenderMethod = "addImmOperands";
+    let DiagnosticType = "InvalidBareSymbol";
+    let DiagnosticString = "operand must be a bare symbol name";
+}
+def bare_symbol : Operand<i32> {
+    let ParserMatchClass = BareSymbolAsmOperand;
+}
+
 
 // ALU Register-Register Ops
 class ALU_rr<bits<6> opcode, string opcodestr, bit Commutable = 0>
@@ -363,3 +374,15 @@ def : InstAlias<"ret",      (JALR R0,  R31,     0), 2>;
 def PseudoLI  : PseudoInst<(outs GPR:$rd), (ins li_imm:$imm), "li",  "$rd, $imm">;
 def PseudoNOT : PseudoInst<(outs GPR:$rd), (ins GPR:$rs),     "not", "$rd, $rs">;
 
+def PseudoLA   : PseudoInst<(outs GPR:$rd), (ins bare_symbol:$sym), "la",   "$rd, $sym">;
+def PseudoCALL : PseudoInst<(outs), (ins bare_symbol:$sym), "call", "$sym"> {
+  let isCall = 1;
+  let Defs = [R31];
+}
+def PseudoTAIL : PseudoInst<(outs), (ins bare_symbol:$sym), "tail", "$sym"> {
+  let isCall = 1;
+  let isTerminator = 1;
+  let isReturn = 1;
+  let isBarrier = 1;
+  let Defs = [R9];   // t0
+}

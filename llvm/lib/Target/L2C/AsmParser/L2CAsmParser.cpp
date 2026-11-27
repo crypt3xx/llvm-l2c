@@ -248,6 +248,18 @@ public:
     return getConstantImm(V) && (isInt<32>(V) || isUInt<32>(V));
   }
 
+  bool isBareSymbol() {
+    if (!isImm())
+      return false;
+
+    // should not be a constant
+    if (dyn_cast<MCConstantExpr>(Imm.Value) != nullptr)
+      return false;
+
+    // should not be a specifier expression
+    return !isa<MCSpecifierExpr>(getImm());
+  }
+
   void addRegOperands(MCInst &Inst, unsigned N) const {
     assert(N == 1 && "Invalid number of operands!");
     Inst.addOperand(MCOperand::createReg(getReg()));
@@ -705,6 +717,7 @@ bool L2CAsmParser::matchAndEmitInstruction(SMLoc IdLoc, unsigned &Opcode,
     }
 
     switch (Inst.getOpcode()) {
+
     case L2C::PseudoLI: {
 
       MCRegister Rd = Inst.getOperand(0).getReg();
@@ -728,6 +741,7 @@ bool L2CAsmParser::matchAndEmitInstruction(SMLoc IdLoc, unsigned &Opcode,
 
       int64_t Hi = (V >> 16) & 0xFFFF;
       int64_t Lo = V & 0xFFFF;
+
       Out.emitInstruction(MCInstBuilder(L2C::LUI).addReg(Rd).addImm(Hi),
                           getSTI());
       if (Lo != 0)
@@ -736,6 +750,7 @@ bool L2CAsmParser::matchAndEmitInstruction(SMLoc IdLoc, unsigned &Opcode,
 
       return false;
     }
+
     case L2C::PseudoNOT: {
 
       MCRegister Rd = Inst.getOperand(0).getReg();
@@ -746,6 +761,60 @@ bool L2CAsmParser::matchAndEmitInstruction(SMLoc IdLoc, unsigned &Opcode,
           getSTI());
       Out.emitInstruction(
           MCInstBuilder(L2C::ADDI).addReg(Rd).addReg(Rd).addImm(-1), getSTI());
+
+      return false;
+    }
+
+    case L2C::PseudoLA: {
+
+      MCRegister Rd = Inst.getOperand(0).getReg();
+      const MCExpr *Sym = Inst.getOperand(1).getExpr();
+      MCContext &Ctx = getContext();
+
+      const MCExpr *Hi = MCSpecifierExpr::create(Sym, L2C::S_HI, Ctx, IdLoc);
+      const MCExpr *Lo = MCSpecifierExpr::create(Sym, L2C::S_LO, Ctx, IdLoc);
+
+      Out.emitInstruction(MCInstBuilder(L2C::LUI).addReg(Rd).addExpr(Hi),
+                          getSTI());
+      Out.emitInstruction(
+          MCInstBuilder(L2C::ADDI).addReg(Rd).addReg(Rd).addExpr(Lo), getSTI());
+
+      return false;
+    }
+
+    case L2C::PseudoCALL: {
+
+      const MCExpr *Sym = Inst.getOperand(0).getExpr();
+      MCContext &Ctx = getContext();
+
+      const MCExpr *PcrelHi =
+          MCSpecifierExpr::create(Sym, L2C::S_PCREL_HI, Ctx, IdLoc);
+      const MCExpr *Lo = MCSpecifierExpr::create(Sym, L2C::S_LO, Ctx, IdLoc);
+
+      Out.emitInstruction(
+          MCInstBuilder(L2C::AUIPC).addReg(L2C::R31).addExpr(PcrelHi),
+          getSTI());
+      Out.emitInstruction(
+          MCInstBuilder(L2C::JALR).addReg(L2C::R31).addReg(L2C::R31).addExpr(
+              Lo),
+          getSTI());
+
+      return false;
+    }
+
+    case L2C::PseudoTAIL: {
+      const MCExpr *Sym = Inst.getOperand(0).getExpr();
+      MCContext &Ctx = getContext();
+
+      const MCExpr *PcrelHi =
+          MCSpecifierExpr::create(Sym, L2C::S_PCREL_HI, Ctx, IdLoc);
+      const MCExpr *Lo = MCSpecifierExpr::create(Sym, L2C::S_LO, Ctx, IdLoc);
+
+      Out.emitInstruction(
+          MCInstBuilder(L2C::AUIPC).addReg(L2C::R9).addExpr(PcrelHi), getSTI());
+      Out.emitInstruction(
+          MCInstBuilder(L2C::JALR).addReg(L2C::R0).addReg(L2C::R9).addExpr(Lo),
+          getSTI());
 
       return false;
     }
