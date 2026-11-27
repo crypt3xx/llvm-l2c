@@ -2,11 +2,11 @@
 
 #include "MCTargetDesc/L2CBaseInfo.h"
 #include "MCTargetDesc/L2CInstPrinter.h"
+#include "MCTargetDesc/L2CMCAsmInfo.h"
 #include "MCTargetDesc/L2CMCTargetDesc.h"
 #include "TargetInfo/L2CTargetInfo.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
-#include "llvm/MC/MCAsmMacro.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
@@ -23,6 +23,7 @@
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Compiler.h"
+#include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/SMLoc.h"
@@ -30,6 +31,9 @@
 #include <cassert>
 #include <cstdint>
 #include <memory>
+#include <utility>
+
+#define DEBUG_TYPE "l2c-asm-parser"
 
 using namespace llvm;
 
@@ -44,6 +48,8 @@ class L2CAsmParser : public MCTargetAsmParser {
   std::unique_ptr<L2COperand> parseRegister();
 
   std::unique_ptr<L2COperand> parseImmediate();
+
+  std::unique_ptr<L2COperand> parseSpecifier();
 
 public:
   bool parseRegister(MCRegister &Reg, SMLoc &StartLoc, SMLoc &EndLoc) override;
@@ -174,14 +180,32 @@ public:
     return true;
   }
 
+  bool isSpecifierExpr(L2C::Specifier S) const {
+    if (!isImm())
+      return false;
+    const auto *SE = dyn_cast<MCSpecifierExpr>(getImm());
+    return SE && SE->getSpecifier() == S;
+  }
+
   bool isSImm16() const {
     int64_t V;
-    return getConstantImm(V) && isInt<16>(V);
+    return (getConstantImm(V) && isInt<16>(V)) || isSpecifierExpr(L2C::S_LO);
   }
 
   bool isUImm16() const {
     int64_t V;
     return getConstantImm(V) && isUInt<16>(V);
+  }
+
+  bool isUImm16LUI() const {
+    int64_t V;
+    return (getConstantImm(V) && isUInt<16>(V)) || isSpecifierExpr(L2C::S_HI);
+  }
+
+  bool isUImm16AUIPC() const {
+    int64_t V;
+    return (getConstantImm(V) && isUInt<16>(V)) ||
+           isSpecifierExpr(L2C::S_PCREL_HI);
   }
 
   bool isUImm5() const {
@@ -192,6 +216,11 @@ public:
   bool isBrTarget16() const {
     if (!isImm())
       return false;
+
+    // should not be a specifier expression
+    if (isa<MCSpecifierExpr>(getImm()))
+      return false;
+
     int64_t V;
     if (getConstantImm(V))
       return V % 4 == 0 && isInt<18>(V);
@@ -201,6 +230,11 @@ public:
   bool isJmpTarget26() const {
     if (!isImm())
       return false;
+
+    // should not be a specifier expression
+    if (isa<MCSpecifierExpr>(getImm()))
+      return false;
+
     int64_t V;
     if (getConstantImm(V))
       return V % 4 == 0 && isInt<28>(V);
@@ -330,17 +364,20 @@ ParseStatus L2CAsmParser::parseOperand(OperandVector *Operands,
     return ParseStatus::Success;
   }
 
-  // If not register, attempt to parse token as immediate
-  Op = parseImmediate();
-
-  // If the token could not be parsed then fail
-  if (!Op) {
-    Error(Parser.getTok().getLoc(), "unknown operand");
-    Parser.eatToEndOfStatement();
-    return ParseStatus::Failure;
+  if (Lexer.is(AsmToken::Percent)) {
+    Op = parseSpecifier();
+    if (!Op)
+      return ParseStatus::Failure;
+  } else {
+    Op = parseImmediate();
+    if (!Op) {
+      Error(Parser.getTok().getLoc(), "unknown operand");
+      Parser.eatToEndOfStatement();
+      return ParseStatus::Failure;
+    }
   }
 
-  // We found an immediate
+  // We found a specifier or an immediate
   Operands->push_back(std::move(Op));
 
   // Check if there's a "(" after the immediate
@@ -348,7 +385,7 @@ ParseStatus L2CAsmParser::parseOperand(OperandVector *Operands,
     return ParseStatus::Success;
 
   // Left Parenthesis found, push the "(" token and consume it
-  Operands->push_back(L2COperand::createToken("(", Lexer.getLoc()));
+  Operands->push_back(L2COperand::createToken("(", Parser.getTok().getLoc()));
   Lex();
 
   Op = parseRegister();
@@ -370,7 +407,7 @@ ParseStatus L2CAsmParser::parseOperand(OperandVector *Operands,
   }
 
   // push the ")" token and consume it
-  Operands->push_back(L2COperand::createToken(")", Lexer.getLoc()));
+  Operands->push_back(L2COperand::createToken(")", Parser.getTok().getLoc()));
   Lex();
 
   return ParseStatus::Success;
@@ -418,6 +455,99 @@ std::unique_ptr<L2COperand> L2CAsmParser::parseImmediate() {
   default:
     return nullptr;
   }
+}
+
+std::unique_ptr<L2COperand> L2CAsmParser::parseSpecifier() {
+  SMLoc StartLoc = Parser.getTok().getLoc();
+  SMLoc EndLoc;
+
+  assert(Lexer.is(AsmToken::Percent) && "Expected a % token!");
+  Lex();
+
+  SMLoc SpecStartLoc = Parser.getTok().getLoc();
+
+  LLVM_DEBUG(dbgs() << "[parseSpecifier] Found % token \n");
+
+  StringRef SpecIdentifier;
+
+  if (Parser.parseIdentifier(SpecIdentifier)) {
+    Error(SpecStartLoc, "expected relocation specifier");
+    return nullptr;
+  }
+
+  LLVM_DEBUG(dbgs() << "[parseSpecifier] Found identifier: " << SpecIdentifier
+                    << "\n");
+
+  L2C::Specifier Spec = L2C::parseSpecifierName(SpecIdentifier);
+
+  if (Spec == L2C::S_None) {
+    Error(SpecStartLoc, "invalid relocation specifier");
+    return nullptr;
+  }
+
+  if (Lexer.isNot(AsmToken::LParen)) {
+    TokError("expected '('");
+    return nullptr;
+  }
+
+  Lex();
+
+  LLVM_DEBUG(dbgs() << "[parseSpecifier] Found ( token \n");
+
+  const MCExpr *SubExpr;
+
+  if (Parser.parseParenExpression(SubExpr, EndLoc))
+    return nullptr;
+
+  LLVM_DEBUG(dbgs() << "[parseSpecifier] Found Sub Expression: ");
+  LLVM_DEBUG(getContext().getAsmInfo().printExpr(dbgs(), *SubExpr));
+  LLVM_DEBUG(dbgs() << "\n");
+
+  int64_t V;
+
+  if (SubExpr->evaluateAsAbsolute(V)) {
+    LLVM_DEBUG(
+        dbgs() << "[parseSpecifier] Sub Expression evaluated as absolute: " << V
+               << "\n");
+
+    if (Spec == L2C::S_HI) {
+      const MCConstantExpr *ConstExpr =
+          MCConstantExpr::create(((V + 0x8000) >> 16) & 0xFFFF, getContext());
+
+      LLVM_DEBUG(
+          dbgs() << "[parseSpecifier] Sub Expression for %hi specifier: ");
+      LLVM_DEBUG(getContext().getAsmInfo().printExpr(dbgs(), *ConstExpr));
+      LLVM_DEBUG(dbgs() << "\n");
+
+      return L2COperand::createImm(ConstExpr, StartLoc, EndLoc);
+    }
+
+    if (Spec == L2C::S_LO) {
+      const MCConstantExpr *ConstExpr =
+          MCConstantExpr::create(SignExtend64<16>(V), getContext());
+
+      LLVM_DEBUG(
+          dbgs() << "[parseSpecifier] Sub Expression for %lo specifier: ");
+      LLVM_DEBUG(getContext().getAsmInfo().printExpr(dbgs(), *ConstExpr));
+      LLVM_DEBUG(dbgs() << "\n");
+
+      return L2COperand::createImm(ConstExpr, StartLoc, EndLoc);
+    }
+
+    if (Spec == L2C::S_PCREL_HI) {
+      Error(StartLoc, "%pcrel_hi operand must be a symbol");
+      return nullptr;
+    }
+  }
+
+  const MCSpecifierExpr *SpecExpr =
+      MCSpecifierExpr::create(SubExpr, Spec, getContext(), StartLoc);
+
+  LLVM_DEBUG(dbgs() << "[parseSpecifier] Specifier Expression: ");
+  LLVM_DEBUG(getContext().getAsmInfo().printSpecifierExpr(dbgs(), *SpecExpr));
+  LLVM_DEBUG(dbgs() << "\n");
+
+  return L2COperand::createImm(SpecExpr, StartLoc, EndLoc);
 }
 
 bool L2CAsmParser::parseRegister(MCRegister &RegNum, SMLoc &StartLoc,

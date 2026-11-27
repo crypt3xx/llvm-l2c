@@ -27,12 +27,28 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
   switch (Fixup.getKind()) {
   default:
     llvm_unreachable("Unknown fixup kind!");
+
   case FK_Data_1:
   case FK_Data_2:
   case FK_Data_4:
   case FK_Data_8:
   case FK_Data_leb128:
     return Value;
+
+  case L2C::fixup_l2c_hi16:
+    return ((Value + 0x8000) >> 16) & 0xFFFF;
+
+  case L2C::fixup_l2c_lo16_i:
+    return Value & 0xFFFF;
+
+  case L2C::fixup_l2c_lo16_s: {
+    uint16_t Out = Value & 0xFFFF;
+    return ((Out >> 5) << 21) | ((Out & 0x1F) << 6);
+  }
+
+  case L2C::fixup_l2c_pcrel_hi16:
+    return 0;
+
   case L2C::fixup_l2c_branch16: {
     int64_t SVal = static_cast<int64_t>(Value);
     if (SVal % 4 != 0) {
@@ -48,12 +64,18 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
     uint16_t Out = (Value >> 2) & 0xFFFF;
     return ((Out >> 5) << 21) | ((Out & 0x1F) << 6);
   }
-  case L2C::fixup_l2c_jump26: {
-    if (Value % 4 != 0)
-      Ctx.reportError(Fixup.getLoc(), "fixup value must be 4-byte aligned");
 
-    if (!isInt<28>(Value))
+  case L2C::fixup_l2c_jump26: {
+    int64_t SVal = static_cast<int64_t>(Value);
+    if (SVal % 4 != 0) {
+      Ctx.reportError(Fixup.getLoc(), "fixup value must be 4-byte aligned");
+      return 0;
+    }
+
+    if (!isInt<28>(SVal)) {
       Ctx.reportError(Fixup.getLoc(), "fixup value out of range");
+      return 0;
+    }
 
     return ((Value >> 2) & 0x3FFFFFF) << 6;
   }
@@ -66,8 +88,9 @@ MCFixupKindInfo L2CAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
       // L2CFixupKinds.h.
       //
       // name                      offset bits  flags
-      {"fixup_l2c_branch16", 0, 32, 0},
-      {"fixup_l2c_jump26", 0, 32, 0},
+      {"fixup_l2c_hi16", 16, 16, 0},    {"fixup_l2c_lo16_i", 16, 16, 0},
+      {"fixup_l2c_lo16_s", 0, 32, 0},   {"fixup_l2c_pcrel_hi16", 16, 16, 0},
+      {"fixup_l2c_branch16", 0, 32, 0}, {"fixup_l2c_jump26", 0, 32, 0},
   };
 
   static_assert((std::size(Infos)) == L2C::NumTargetFixupKinds,
@@ -116,6 +139,20 @@ void L2CAsmBackend::applyFixup(const MCFragment &F, const MCFixup &Fixup,
   // For big endian cores, data fixup should be swapped.
   for (unsigned I = 0; I != NumBytes; ++I)
     Data[I] |= uint8_t((Bits >> (I * 8)) & 0xff);
+}
+
+std::optional<bool> L2CAsmBackend::evaluateFixup(const MCFragment &,
+                                                 MCFixup &Fixup, MCValue &,
+                                                 uint64_t &) {
+  switch (Fixup.getKind()) {
+  case L2C::fixup_l2c_hi16:
+  case L2C::fixup_l2c_lo16_i:
+  case L2C::fixup_l2c_lo16_s:
+  case L2C::fixup_l2c_pcrel_hi16:
+    return false;
+  default:
+    return {};
+  }
 }
 
 bool L2CAsmBackend::writeNopData(raw_ostream &OS, uint64_t Count,

@@ -1,5 +1,6 @@
 // L2CMCCodeEmitter.cpp
 
+#include "L2CMCAsmInfo.h"
 #include "MCTargetDesc/L2CFixupKinds.h"
 #include "MCTargetDesc/L2CMCTargetDesc.h"
 #include "llvm/ADT/SmallVector.h"
@@ -11,6 +12,7 @@
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/EndianStream.h"
 #include <cassert>
 #include <cstdint>
@@ -25,10 +27,12 @@ class L2CMCCodeEmitter : public MCCodeEmitter {
 
   L2CMCCodeEmitter(const L2CMCCodeEmitter &) = delete;
   void operator=(const L2CMCCodeEmitter &) = delete;
+  const MCInstrInfo &MCII;
   MCContext &Ctx;
 
 public:
-  L2CMCCodeEmitter(MCInstrInfo const &MCII, MCContext &Ctx) : Ctx(Ctx) {}
+  L2CMCCodeEmitter(MCInstrInfo const &MCII, MCContext &Ctx)
+      : MCII(MCII), Ctx(Ctx) {}
   ~L2CMCCodeEmitter() override = default;
 
   // The functions below are called by TableGen generated functions for getting
@@ -73,7 +77,40 @@ unsigned L2CMCCodeEmitter::getMachineOpValue(
   if (MCOp.isImm())
     return MCOp.getImm();
 
-  report_fatal_error("unexpected expression operand");
+  const MCSpecifierExpr *SpecExpr = dyn_cast<MCSpecifierExpr>(MCOp.getExpr());
+
+  if (!SpecExpr) {
+    report_fatal_error("unexpected operand");
+    return 0;
+  }
+
+  MCFixupKind Kind;
+  bool PCRel;
+
+  switch (SpecExpr->getSpecifier()) {
+  case L2C::S_HI:
+    Kind = L2C::fixup_l2c_hi16;
+    PCRel = false;
+    break;
+  case L2C::S_LO:
+    if (MCII.get(Inst.getOpcode()).mayStore()) {
+      Kind = L2C::fixup_l2c_lo16_s;
+      PCRel = false;
+    } else {
+      Kind = L2C::fixup_l2c_lo16_i;
+      PCRel = false;
+    }
+    break;
+  case L2C::S_PCREL_HI:
+    Kind = L2C::fixup_l2c_pcrel_hi16;
+    PCRel = true;
+    break;
+  default:
+    report_fatal_error("unexpected specifier");
+    return 0;
+  }
+
+  Fixups.push_back(MCFixup::create(0, MCOp.getExpr(), Kind, PCRel));
   return 0;
 }
 
@@ -82,7 +119,8 @@ static uint64_t getPCRelTargetOpValue(const MCInst &MI, unsigned OpNo,
                                       MCFixupKind Kind) {
   const MCOperand &MO = MI.getOperand(OpNo);
 
-  if (MO.isImm()) // If it's a constant return its encoding (shifter right by 2)
+  if (MO.isImm()) // If it's a constant return its encoding (shifter right by
+                  // 2)
     return static_cast<uint64_t>(MO.getImm() >> 2);
 
   assert(MO.isExpr() && "branch target must be an immediate or expression");

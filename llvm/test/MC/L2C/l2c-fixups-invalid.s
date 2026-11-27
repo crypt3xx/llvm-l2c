@@ -7,7 +7,7 @@ addi a0, a0, foo
 sw a0, foo(a1)
 # CHECK: :[[@LINE-1]]:8: error: immediate must be an integer in the range [-32768, 32767]
 lui a0, foo
-# CHECK: :[[@LINE-1]]:9: error: immediate must be an integer in the range [0, 65535]
+# CHECK: :[[@LINE-1]]:9: error: operand must be a symbol with %hi specifier or an integer in the range [0, 65535]
 slli a0, a0, foo
 # CHECK: :[[@LINE-1]]:14: error: immediate must be an integer in the range [0, 31]
 li a0, foo

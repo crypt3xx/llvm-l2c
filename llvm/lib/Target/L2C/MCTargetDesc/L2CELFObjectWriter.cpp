@@ -40,6 +40,9 @@ unsigned L2CELFObjectWriter::getRelocType(const MCFixup &Fixup,
   if (IsPCRel) {
     switch (Kind) {
 
+    case L2C::fixup_l2c_pcrel_hi16:
+      return ELF::R_L2C_PCREL_HI16;
+
     case L2C::fixup_l2c_branch16:
       return ELF::R_L2C_BRANCH16;
 
@@ -57,6 +60,15 @@ unsigned L2CELFObjectWriter::getRelocType(const MCFixup &Fixup,
 
   case FK_Data_4:
     return ELF::R_L2C_32;
+
+  case L2C::fixup_l2c_hi16:
+    return ELF::R_L2C_HI16;
+
+  case L2C::fixup_l2c_lo16_i:
+    return ELF::R_L2C_LO16_I;
+
+  case L2C::fixup_l2c_lo16_s:
+    return ELF::R_L2C_LO16_S;
 
   default: {
     reportError(Fixup.getLoc(), "unsupported relocation type");

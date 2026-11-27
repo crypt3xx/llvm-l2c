@@ -7,12 +7,15 @@
 
 namespace llvm::L2C {
 enum Fixups {
-  // imm_B (split field), value = (S + A - P) >> 2
-  fixup_l2c_branch16 = FirstTargetFixupKind,
-  // imm_J (bits 31-6), value = (S + A - P) >> 2
+  fixup_l2c_hi16 = FirstTargetFixupKind,
+  fixup_l2c_lo16_i,
+  fixup_l2c_lo16_s,
+  fixup_l2c_pcrel_hi16,
+  fixup_l2c_branch16,
   fixup_l2c_jump26,
 
   fixup_l2c_invalid,
+
   NumTargetFixupKinds = fixup_l2c_invalid - FirstTargetFixupKind
 };
 } // namespace llvm::L2C

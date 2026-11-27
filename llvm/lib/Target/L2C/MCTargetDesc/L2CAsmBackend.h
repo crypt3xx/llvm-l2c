@@ -1,10 +1,10 @@
 // L2CAsmBackend.h
 
-#include "MCTargetDesc/L2CBaseInfo.h"
 #include "MCTargetDesc/L2CMCTargetDesc.h"
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include <cstdint>
+#include <optional>
 
 namespace llvm {
 class MCAssembler;
@@ -22,6 +22,9 @@ public:
 
   void applyFixup(const MCFragment &, const MCFixup &, const MCValue &Target,
                   uint8_t *Data, uint64_t Value, bool IsResolved) override;
+
+  std::optional<bool> evaluateFixup(const MCFragment &, MCFixup &Fixup,
+                                    MCValue &, uint64_t &) override;
 
   bool writeNopData(raw_ostream &OS, uint64_t Count,
                     const MCSubtargetInfo *STI) const override;

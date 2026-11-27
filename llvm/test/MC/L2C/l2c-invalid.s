@@ -28,7 +28,7 @@ ori a0, a0, -1
 andi a0, a0, 65536
 # CHECK: :[[@LINE-1]]:14: error: immediate must be an integer in the range [0, 65535]
 lui a0, 65536
-# CHECK: :[[@LINE-1]]:9: error: immediate must be an integer in the range [0, 65535]
+# CHECK: :[[@LINE-1]]:9: error: operand must be a symbol with %hi specifier or an integer in the range [0, 65535]
 csrr a0, 65536
 # CHECK: :[[@LINE-1]]:10: error: operand must be a valid system register name or an integer in the range [0, 65535]
 slli a0, a0, 32

@@ -28,6 +28,30 @@ def uimm16 : Operand<i32> {
   let DecoderMethod = "decodeUImm16";
 }
 
+// Unsigned 16 bits Immediate for LUI instr (supports %HI reloc)
+def UImm16LUIAsmOperand : AsmOperandClass {
+    let Name = "UImm16LUI";
+    let RenderMethod = "addImmOperands";
+    let DiagnosticType = !strconcat("Invalid", Name);
+    let DiagnosticString = "operand must be a symbol with %hi specifier or an integer in the range [0, 65535]";
+}
+def uimm16_lui : Operand<i32> {
+  let ParserMatchClass = UImm16LUIAsmOperand;
+  let DecoderMethod = "decodeUImm16";
+}
+
+// Unsigned 16 bits Immediate for AUIPC instr (supports %PCREL_HI reloc)
+def UImm16AUIPCAsmOperand : AsmOperandClass {
+    let Name = "UImm16AUIPC";
+    let RenderMethod = "addImmOperands";
+    let DiagnosticType = !strconcat("Invalid", Name);
+    let DiagnosticString = "operand must be a symbol with %pcrel_hi specifier or an integer in the range [0, 65535]";
+}
+def uimm16_auipc : Operand<i32> {
+  let ParserMatchClass = UImm16AUIPCAsmOperand;
+  let DecoderMethod = "decodeUImm16";
+}
+
 // Unsigned 5 bits Immediate (for shifts)
 def UImm5AsmOperand : AsmOperandClass {
     let Name = "UImm5";
@@ -186,8 +210,8 @@ def SRAI : ALU_rshifti<0b011000, "srai">;
 
 
 // Upper Ops
-class Upper<bits<6> opcode, string opcodestr>
-    : L2CInstI<opcode, (outs GPR:$rd), (ins uimm16:$imm16), opcodestr, "$rd, $imm16", []>
+class Upper<bits<6> opcode, string opcodestr, DAGOperand imm_op>
+    : L2CInstI<opcode, (outs GPR:$rd), (ins imm_op:$imm16), opcodestr, "$rd, $imm16", []>
 {
     let hasSideEffects = 0;
     let mayLoad = 0;
@@ -196,8 +220,8 @@ class Upper<bits<6> opcode, string opcodestr>
     let rs1 = 0;
 }
 
-def LUI   : Upper<0b010000, "lui"  >;
-def AUIPC : Upper<0b011011, "auipc">;
+def LUI   : Upper<0b010000, "lui"  , uimm16_lui>;
+def AUIPC : Upper<0b011011, "auipc", uimm16_auipc>;
 
 
 // CSR Read
